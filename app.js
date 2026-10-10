@@ -45,15 +45,33 @@ function formatHanViet(str) {
   return str.trim().toUpperCase();
 }
 
-function normalizeVocabItem(item) {
-  if (!item) return item;
+function normalizeVocabItem(item, index = 0) {
+  if (!item || typeof item !== 'object') return null;
+
+  // Flexible key resolution for imported JSON files
+  const hanzi = (item.hanzi || item.chinese || item.word || item.character || '').toString().trim();
+  const pinyin = (item.pinyin || item.pin_yin || '').toString().trim();
+  const hanviet = (item.hanviet || item.han_viet || item.sino_vietnamese || item.am_han_viet || '').toString().trim();
+  const meaningVn = (item.meaningVn || item.meaning_vn || item.vietnamese || item.meaning || item.nghia || '').toString().trim();
+  const meaningEn = (item.meaningEn || item.meaning_en || item.english || item.definition || '').toString().trim();
+  const exampleCn = (item.exampleCn || item.example_cn || item.example_chinese || item.example || '').toString().trim();
+  const exampleVn = (item.exampleVn || item.example_vn || item.example_vietnamese || '').toString().trim();
+
+  // Item must have at least hanzi or meaning to be considered a vocabulary item
+  if (!hanzi && !meaningVn) return null;
+
+  const id = item.id ? item.id.toString() : `vocab-${Date.now()}-${index}`;
+
   return {
-    ...item,
-    pinyin: formatPinyin(item.pinyin),
-    hanviet: formatHanViet(item.hanviet),
-    meaningVn: capitalizeFirstLetter(item.meaningVn),
-    meaningEn: capitalizeFirstLetter(item.meaningEn),
-    exampleVn: capitalizeFirstLetter(item.exampleVn)
+    id,
+    hanzi: hanzi || '未知',
+    pinyin: formatPinyin(pinyin),
+    hanviet: formatHanViet(hanviet),
+    meaningVn: capitalizeFirstLetter(meaningVn) || 'Chưa có nghĩa',
+    meaningEn: capitalizeFirstLetter(meaningEn) || '-',
+    exampleCn: exampleCn || '',
+    exampleVn: capitalizeFirstLetter(exampleVn) || '',
+    createdAt: item.createdAt || Date.now()
   };
 }
 
@@ -170,13 +188,13 @@ class VocabApp {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           // Normalize existing saved items so all follow the uppercase/lowercase/capitalize rules
-          return parsed.map(normalizeVocabItem);
+          return parsed.map((item, idx) => normalizeVocabItem(item, idx)).filter(Boolean);
         }
       }
     } catch (e) {
       console.error('Error loading vocabulary list from storage:', e);
     }
-    const defaults = DEFAULT_VOCABULARY.map(normalizeVocabItem);
+    const defaults = DEFAULT_VOCABULARY.map((item, idx) => normalizeVocabItem(item, idx)).filter(Boolean);
     this.saveVocabList(defaults);
     return defaults;
   }
@@ -681,7 +699,7 @@ class VocabApp {
     }
 
     const dup = this.vocabList.find(x => 
-      x.hanzi.trim().toLowerCase() === hanzi.toLowerCase() &&
+      x && x.hanzi && x.hanzi.trim().toLowerCase() === hanzi.toLowerCase() &&
       x.id !== this.editingVocabId
     );
 
@@ -822,7 +840,7 @@ class VocabApp {
 
     // Check duplicate against existing vocabulary list
     const duplicate = this.vocabList.find(x => 
-      x.hanzi.trim().toLowerCase() === hanzi.toLowerCase() &&
+      x && x.hanzi && x.hanzi.trim().toLowerCase() === hanzi.toLowerCase() &&
       x.id !== this.editingVocabId
     );
 
@@ -1039,13 +1057,24 @@ class VocabApp {
     const query = (this.bankSearchInput ? this.bankSearchInput.value : '').toLowerCase().trim();
     
     const filtered = this.vocabList.filter(item => {
+      if (!item) return false;
       if (!query) return true;
+      const hz = (item.hanzi || '').toString().toLowerCase();
+      const py = (item.pinyin || '').toString().toLowerCase();
+      const hv = (item.hanviet || '').toString().toLowerCase();
+      const vn = (item.meaningVn || '').toString().toLowerCase();
+      const en = (item.meaningEn || '').toString().toLowerCase();
+      const exCn = (item.exampleCn || '').toString().toLowerCase();
+      const exVn = (item.exampleVn || '').toString().toLowerCase();
+
       return (
-        item.hanzi.toLowerCase().includes(query) ||
-        item.pinyin.toLowerCase().includes(query) ||
-        item.hanviet.toLowerCase().includes(query) ||
-        item.meaningVn.toLowerCase().includes(query) ||
-        item.meaningEn.toLowerCase().includes(query)
+        hz.includes(query) ||
+        py.includes(query) ||
+        hv.includes(query) ||
+        vn.includes(query) ||
+        en.includes(query) ||
+        exCn.includes(query) ||
+        exVn.includes(query)
       );
     });
 
@@ -1053,7 +1082,7 @@ class VocabApp {
       this.bankGrid.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
           <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔍</div>
-          <p>Không tìm thấy từ vựng nào phù hợp với từ khóa "${query}".</p>
+          <p>Không tìm thấy từ vựng nào phù hợp với từ khóa "${this.escapeHtml(query)}".</p>
         </div>
       `;
       return;
@@ -1064,18 +1093,18 @@ class VocabApp {
         <div>
           <div class="vocab-card-header">
             <div>
-              <div class="vocab-card-hanzi">${this.escapeHtml(item.hanzi)}</div>
-              <div class="vocab-card-pinyin">${this.escapeHtml(formatPinyin(item.pinyin))}</div>
+              <div class="vocab-card-hanzi">${this.escapeHtml(item.hanzi || '')}</div>
+              <div class="vocab-card-pinyin">${this.escapeHtml(formatPinyin(item.pinyin || ''))}</div>
             </div>
             <button class="audio-trigger-btn" style="width: 36px; height: 36px; font-size: 1rem;" 
-                    onclick="app.speakChinese('${this.escapeQuotes(item.hanzi)}')" title="Nghe phát âm">
+                    onclick="app.speakChinese('${this.escapeQuotes(item.hanzi || '')}')" title="Nghe phát âm">
               🔊
             </button>
           </div>
-          <div class="vocab-card-hanviet">Âm Hán-Việt: ${this.escapeHtml(formatHanViet(item.hanviet))}</div>
+          <div class="vocab-card-hanviet">Âm Hán-Việt: ${this.escapeHtml(formatHanViet(item.hanviet || ''))}</div>
           <div class="vocab-card-meanings">
-            <div class="vocab-card-vn">🇻🇳 ${this.escapeHtml(capitalizeFirstLetter(item.meaningVn))}</div>
-            <div class="vocab-card-en">🇬🇧 ${this.escapeHtml(capitalizeFirstLetter(item.meaningEn))}</div>
+            <div class="vocab-card-vn">🇻🇳 ${this.escapeHtml(capitalizeFirstLetter(item.meaningVn || ''))}</div>
+            <div class="vocab-card-en">🇬🇧 ${this.escapeHtml(capitalizeFirstLetter(item.meaningEn || ''))}</div>
           </div>
           ${item.exampleCn ? `
             <div style="margin-top: 0.6rem; font-size: 0.85rem; color: var(--text-muted); background: rgba(0,0,0,0.15); padding: 0.4rem 0.6rem; border-radius: 6px;">
@@ -1085,7 +1114,7 @@ class VocabApp {
           ` : ''}
         </div>
         <div class="vocab-card-footer">
-          <span style="font-size: 0.75rem; color: var(--text-muted);">ID: ${item.id.replace('vocab-', '#')}</span>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">ID: ${(item.id || '').toString().replace('vocab-', '#')}</span>
           <div class="card-actions-row">
             <button class="card-icon-btn edit" onclick="app.editVocab('${item.id}')" title="Chỉnh sửa từ vựng này">
               ✏️
@@ -1181,19 +1210,40 @@ class VocabApp {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const importedData = JSON.parse(event.target.result);
-        if (Array.isArray(importedData)) {
-          // Merge or replace
-          const combined = [...importedData];
-          this.saveVocabList(combined);
+        const rawData = JSON.parse(event.target.result);
+        let listToImport = null;
+
+        if (Array.isArray(rawData)) {
+          listToImport = rawData;
+        } else if (rawData && typeof rawData === 'object') {
+          // Check common wrapper keys: words, vocabulary, vocabList, vocab, data, items
+          const candidate = rawData.words || rawData.vocabulary || rawData.vocabList || rawData.vocab || rawData.data || rawData.items;
+          if (Array.isArray(candidate)) {
+            listToImport = candidate;
+          }
+        }
+
+        if (Array.isArray(listToImport) && listToImport.length > 0) {
+          const sanitized = listToImport
+            .map((item, idx) => normalizeVocabItem(item, idx))
+            .filter(item => item !== null && item.hanzi && item.hanzi !== '未知');
+
+          if (sanitized.length === 0) {
+            this.showToast('Không tìm thấy từ vựng hợp lệ trong file JSON!', 'error');
+            return;
+          }
+
+          // Save and refresh
+          this.saveVocabList(sanitized);
           this.renderVocabBank();
           this.initReviewSession();
-          this.showToast(`Đã nạp thành công ${importedData.length} từ vựng từ file!`, 'success');
+          this.showToast(`Đã nạp thành công ${sanitized.length} từ vựng từ file!`, 'success');
         } else {
           this.showToast('File JSON không đúng định dạng danh sách từ vựng!', 'error');
         }
       } catch (err) {
-        this.showToast('Lỗi khi đọc file JSON!', 'error');
+        console.error('Error importing JSON:', err);
+        this.showToast('Lỗi khi đọc file JSON (file bị sai định dạng)!', 'error');
       }
       this.fileImportInput.value = '';
     };
