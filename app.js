@@ -299,6 +299,9 @@ class VocabApp {
     this.inputConfirmPw = document.getElementById('input-confirm-pw');
     this.changePwErrorMsg = document.getElementById('change-pw-error-msg');
     this.btnCloseChangePw = document.getElementById('btn-close-change-pw');
+    this.changePwSyncInfo = document.getElementById('change-pw-sync-info');
+    this.newMasterHashDisplay = document.getElementById('new-master-hash-display');
+    this.btnCopyMasterHash = document.getElementById('btn-copy-master-hash');
   }
 
   initTheme() {
@@ -538,6 +541,26 @@ class VocabApp {
       this.changePwForm.addEventListener('submit', (e) => {
         e.preventDefault();
         this.handleChangePasswordSubmit();
+      });
+    }
+
+    if (this.btnCopyMasterHash && this.newMasterHashDisplay) {
+      this.btnCopyMasterHash.addEventListener('click', () => {
+        const val = this.newMasterHashDisplay.value;
+        if (!val) return;
+        navigator.clipboard.writeText(val).then(() => {
+          this.btnCopyMasterHash.textContent = '✅ Đã chép!';
+          setTimeout(() => {
+            this.btnCopyMasterHash.textContent = '📋 Sao chép';
+          }, 2000);
+        }).catch(() => {
+          this.newMasterHashDisplay.select();
+          document.execCommand('copy');
+          this.btnCopyMasterHash.textContent = '✅ Đã chép!';
+          setTimeout(() => {
+            this.btnCopyMasterHash.textContent = '📋 Sao chép';
+          }, 2000);
+        });
       });
     }
   }
@@ -1129,6 +1152,14 @@ class VocabApp {
     const sessionAuth = sessionStorage.getItem(SESSION_AUTH);
     const rememberedHash = localStorage.getItem(STORAGE_REMEMBER_AUTH);
 
+    // Nếu mật khẩu chủ trên hệ thống đã đổi, hủy phiên đăng nhập cũ và buộc nhập mật khẩu mới
+    if (rememberedHash && rememberedHash !== masterHash) {
+      localStorage.removeItem(STORAGE_REMEMBER_AUTH);
+      sessionStorage.removeItem(SESSION_AUTH);
+      this.showUnlockScreen();
+      return;
+    }
+
     if (sessionAuth === 'true' || (rememberedHash && rememberedHash === masterHash)) {
       this.unlockApp(false);
     } else {
@@ -1278,6 +1309,9 @@ class VocabApp {
         this.changePwErrorMsg.textContent = '';
         this.changePwErrorMsg.style.display = 'none';
       }
+      if (this.changePwSyncInfo) {
+        this.changePwSyncInfo.style.display = 'none';
+      }
       setTimeout(() => {
         if (this.inputOldPw) this.inputOldPw.focus();
       }, 50);
@@ -1330,8 +1364,14 @@ class VocabApp {
         localStorage.setItem(STORAGE_REMEMBER_AUTH, newHash);
       }
 
-      this.closeChangePasswordModal();
-      this.showToast('Đã đổi mật khẩu bảo mật thành công!', 'success');
+      if (this.changePwSyncInfo && this.newMasterHashDisplay) {
+        this.newMasterHashDisplay.value = newHash;
+        this.changePwSyncInfo.style.display = 'block';
+        this.showToast('Đã đổi mật khẩu trên thiết bị này!', 'success');
+      } else {
+        this.closeChangePasswordModal();
+        this.showToast('Đã đổi mật khẩu bảo mật thành công!', 'success');
+      }
     } catch (e) {
       console.error('Error changing password:', e);
       this.showChangePwError('Có lỗi xảy ra khi đổi mật khẩu.');
