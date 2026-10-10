@@ -7,6 +7,10 @@ const STORAGE_AUTH_HASH = 'chinese_vocab_auth_hash';
 const STORAGE_REMEMBER_AUTH = 'chinese_vocab_remember_auth';
 const SESSION_AUTH = 'chinese_vocab_session_auth';
 
+// Pre-configured Master Password Hash (SHA-256 with salt)
+// Mật khẩu chủ mặc định ban đầu: "123456"
+const DEFAULT_MASTER_PASSWORD_HASH = '675801870d23d5d54e76329b9cc7b0be8f895db36f189868d242200027a3e36c';
+
 /**
  * SHA-256 password hashing with salt using Web Crypto API
  */
@@ -1116,14 +1120,12 @@ class VocabApp {
   // =========================================================================
   // Authentication & Lock Screen System
   // =========================================================================
-  async checkAuthStatus() {
-    const masterHash = localStorage.getItem(STORAGE_AUTH_HASH);
-    if (!masterHash) {
-      // First-time visit: no password set yet, prompt user to create master password
-      this.showLockSetupScreen();
-      return;
-    }
+  getMasterHash() {
+    return localStorage.getItem(STORAGE_AUTH_HASH) || DEFAULT_MASTER_PASSWORD_HASH;
+  }
 
+  async checkAuthStatus() {
+    const masterHash = this.getMasterHash();
     const sessionAuth = sessionStorage.getItem(SESSION_AUTH);
     const rememberedHash = localStorage.getItem(STORAGE_REMEMBER_AUTH);
 
@@ -1201,7 +1203,7 @@ class VocabApp {
 
     try {
       const inputHash = await hashPassword(pwd);
-      const masterHash = localStorage.getItem(STORAGE_AUTH_HASH);
+      const masterHash = this.getMasterHash();
 
       if (inputHash === masterHash) {
         if (this.lockRememberMe && this.lockRememberMe.checked) {
@@ -1312,7 +1314,7 @@ class VocabApp {
 
     try {
       const oldHash = await hashPassword(oldPw);
-      const masterHash = localStorage.getItem(STORAGE_AUTH_HASH);
+      const masterHash = this.getMasterHash();
 
       if (masterHash && oldHash !== masterHash) {
         this.showChangePwError('Mật khẩu hiện tại không chính xác!');
