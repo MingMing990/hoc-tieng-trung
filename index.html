@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app-wrapper">
+  <div class="app-wrapper is-locked">
     <!-- Header -->
     <header class="app-header">
       <div class="brand-section">
@@ -26,6 +26,12 @@
           <span>📚</span>
           <span id="stat-total-count">0 từ</span>
         </div>
+        <button class="icon-btn" id="btn-lock-app" aria-label="Khóa ứng dụng ngay" title="Khóa ứng dụng ngay">
+          🔒
+        </button>
+        <button class="icon-btn" id="btn-change-password" aria-label="Đổi mật khẩu" title="Đổi mật khẩu bảo vệ">
+          🔑
+        </button>
         <button class="icon-btn" id="theme-toggle-btn" aria-label="Đổi giao diện Sáng/Tối" title="Đổi giao diện">
           ☀️
         </button>
@@ -357,6 +363,86 @@
           <span>✏️</span> Chỉnh sửa từ này
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen Lock Screen Overlay -->
+  <div class="lock-screen-overlay" id="lock-screen-overlay">
+    <div class="lock-screen-card">
+      <div class="lock-seal">密</div>
+      <h2 class="lock-title" id="lock-screen-title">Bảo Mật Cá Nhân</h2>
+      <p class="lock-desc" id="lock-screen-desc">Vui lòng nhập mật khẩu để mở khóa ứng dụng</p>
+
+      <!-- Form: Unlock Screen (When master password exists) -->
+      <form id="lock-screen-form" class="lock-form" autocomplete="off">
+        <div class="lock-input-group">
+          <input type="password" id="lock-input-password" class="lock-input" placeholder="Nhập mật khẩu của bạn..." autofocus required>
+          <button type="button" class="btn-toggle-pw" id="btn-toggle-pw" title="Hiện/Ẩn mật khẩu">👁️</button>
+        </div>
+
+        <div class="lock-error-msg" id="lock-error-msg" style="display: none;"></div>
+
+        <div class="lock-remember-row">
+          <label class="remember-label">
+            <input type="checkbox" id="lock-remember-me" checked>
+            <span>Ghi nhớ đăng nhập trên thiết bị này</span>
+          </label>
+        </div>
+
+        <button type="submit" class="btn-unlock" id="btn-unlock">
+          <span>🔓</span> Mở Khóa Truy Cập
+        </button>
+      </form>
+
+      <!-- Form: First-Time Password Setup (When no password is set yet) -->
+      <form id="lock-setup-form" class="lock-form" style="display: none;" autocomplete="off">
+        <div class="lock-input-group">
+          <input type="password" id="lock-setup-password" class="lock-input" placeholder="Tạo mật khẩu bảo vệ mới..." required>
+        </div>
+        <div class="lock-input-group">
+          <input type="password" id="lock-setup-confirm" class="lock-input" placeholder="Xác nhận lại mật khẩu..." required>
+        </div>
+        <div class="lock-error-msg" id="setup-error-msg" style="display: none;"></div>
+
+        <p style="font-size: 0.82rem; color: var(--text-muted); text-align: left; line-height: 1.4;">
+          💡 Lưu ý: Hãy ghi nhớ mật khẩu này. Bạn sẽ dùng mật khẩu này để mở khóa mỗi khi truy cập trên bất kỳ trình duyệt nào.
+        </p>
+
+        <button type="submit" class="btn-unlock" id="btn-save-setup">
+          <span>🔒</span> Lưu Mật Khẩu & Mở Khóa
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Change Password -->
+  <div class="modal-backdrop" id="change-pw-modal" style="display: none;" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-dialog-header">
+        <span class="modal-dialog-icon">🔑</span>
+        <h3 class="modal-dialog-title" style="color: #60a5fa;">Đổi Mật Khẩu Bảo Mật</h3>
+      </div>
+      <form id="change-pw-form" class="vocab-form" autocomplete="off">
+        <div class="form-group">
+          <label for="input-old-pw" class="form-label">Mật khẩu hiện tại</label>
+          <input type="password" id="input-old-pw" class="form-input" placeholder="Nhập mật khẩu hiện tại..." required>
+        </div>
+        <div class="form-group">
+          <label for="input-new-pw" class="form-label">Mật khẩu mới</label>
+          <input type="password" id="input-new-pw" class="form-input" placeholder="Nhập mật khẩu mới..." required>
+        </div>
+        <div class="form-group">
+          <label for="input-confirm-pw" class="form-label">Xác nhận mật khẩu mới</label>
+          <input type="password" id="input-confirm-pw" class="form-input" placeholder="Nhập lại mật khẩu mới..." required>
+        </div>
+        <div class="lock-error-msg" id="change-pw-error-msg" style="display: none;"></div>
+        <div class="modal-dialog-actions" style="margin-top: 1rem;">
+          <button type="button" class="btn-secondary" id="btn-close-change-pw">Hủy bỏ</button>
+          <button type="submit" class="reveal-btn" style="width: auto; padding: 0.75rem 1.4rem;">
+            <span>💾</span> Cập Nhật Mật Khẩu
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

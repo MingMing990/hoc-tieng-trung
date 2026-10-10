@@ -59,6 +59,14 @@
 - **Xuất / Nhập JSON (Backup & Restore)**: Sao lưu dữ liệu từ vựng ra file JSON hoặc nhập lại trên thiết bị khác.
 - **Có sẵn bộ từ mẫu HSK**: Tích hợp sẵn các từ vựng thông dụng để trải nghiệm ngay.
 
+### 5. 🔒 Màn Hình Khóa Bảo Mật (Lock Screen & Security)
+- **Bảo mật cá nhân khi Public lên GitHub Pages**: Toàn bộ giao diện học từ vựng bị làm mờ sâu (blur 18px), khóa toàn bộ tương tác và vô hiệu hóa các phím tắt cho đến khi nhập đúng mật khẩu.
+- **Thiết lập mật khẩu lần đầu (First-time Setup)**: Khi mở trang lần đầu (chưa tạo mật khẩu), giao diện tự động hiện màn hình tạo mật khẩu bảo vệ mới kèm xác nhận.
+- **Mã hóa chuẩn Web Crypto API (SHA-256 + Salt)**: Mật khẩu được băm an toàn theo tiêu chuẩn quân sự ngay tại trình duyệt, không lưu plain text, không yêu cầu máy chủ backend.
+- **Ghi nhớ đăng nhập (Remember Me)**: Tùy chọn lưu phiên đăng nhập trên thiết bị quen thuộc để không phải nhập lại mỗi lần mở tab.
+- **Nút Khóa nhanh 🔒 trên Header**: Bấm để khóa ứng dụng ngay lập tức khi rời khỏi màn hình.
+- **Đổi mật khẩu bảo vệ 🔑**: Nút chìa khóa trên thanh tiêu đề mở hộp thoại Modal đổi mật khẩu (yêu cầu xác nhận mật khẩu hiện tại).
+
 ---
 
 ## 🚀 Hướng Dẫn Chạy Ứng Dụng

@@ -2,6 +2,22 @@
  * Chinese Vocabulary Master - Main Application Logic
  */
 
+// Security & Authentication Storage Keys
+const STORAGE_AUTH_HASH = 'chinese_vocab_auth_hash';
+const STORAGE_REMEMBER_AUTH = 'chinese_vocab_remember_auth';
+const SESSION_AUTH = 'chinese_vocab_session_auth';
+
+/**
+ * SHA-256 password hashing with salt using Web Crypto API
+ */
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + "_chinesevocab_secret_salt_2026");
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * Text Auto-formatting Utilities:
  * 1. Capitalize first letter of string/sentence
@@ -131,12 +147,16 @@ class VocabApp {
     this.editingVocabId = null;
     this.pendingDuplicateVocab = null;
 
+    // Security & Lock Screen State
+    this.isLocked = true;
+
     this.initDOM();
     this.initTheme();
     this.bindEvents();
     this.updateStats();
     this.renderVocabBank();
     this.initReviewSession();
+    this.checkAuthStatus();
   }
 
   // Load from local storage or fallback to defaults
@@ -247,6 +267,34 @@ class VocabApp {
     this.statTotalCount = document.getElementById('stat-total-count');
     this.themeToggleBtn = document.getElementById('theme-toggle-btn');
     this.toastContainer = document.getElementById('toast-container');
+
+    // Lock Screen & Security Elements
+    this.appWrapper = document.querySelector('.app-wrapper');
+    this.lockScreenOverlay = document.getElementById('lock-screen-overlay');
+    this.lockScreenTitle = document.getElementById('lock-screen-title');
+    this.lockScreenDesc = document.getElementById('lock-screen-desc');
+    this.lockScreenForm = document.getElementById('lock-screen-form');
+    this.lockInputPassword = document.getElementById('lock-input-password');
+    this.btnTogglePw = document.getElementById('btn-toggle-pw');
+    this.lockRememberMe = document.getElementById('lock-remember-me');
+    this.lockErrorMsg = document.getElementById('lock-error-msg');
+
+    this.lockSetupForm = document.getElementById('lock-setup-form');
+    this.lockSetupPassword = document.getElementById('lock-setup-password');
+    this.lockSetupConfirm = document.getElementById('lock-setup-confirm');
+    this.setupErrorMsg = document.getElementById('setup-error-msg');
+
+    this.btnLockApp = document.getElementById('btn-lock-app');
+    this.btnChangePassword = document.getElementById('btn-change-password');
+
+    // Change Password Modal Elements
+    this.changePwModal = document.getElementById('change-pw-modal');
+    this.changePwForm = document.getElementById('change-pw-form');
+    this.inputOldPw = document.getElementById('input-old-pw');
+    this.inputNewPw = document.getElementById('input-new-pw');
+    this.inputConfirmPw = document.getElementById('input-confirm-pw');
+    this.changePwErrorMsg = document.getElementById('change-pw-error-msg');
+    this.btnCloseChangePw = document.getElementById('btn-close-change-pw');
   }
 
   initTheme() {
@@ -400,6 +448,7 @@ class VocabApp {
 
     // Keyboard Shortcuts for Review
     window.addEventListener('keydown', (e) => {
+      if (this.isLocked) return;
       const activeTab = document.querySelector('.tab-content.active');
       if (!activeTab || activeTab.id !== 'tab-review') return;
       
@@ -437,6 +486,56 @@ class VocabApp {
         this.showToast('Đã khôi phục bộ từ vựng mẫu thành công!', 'success');
       }
     });
+
+    // Lock Screen & Security Events
+    if (this.btnTogglePw && this.lockInputPassword) {
+      this.btnTogglePw.addEventListener('click', () => {
+        const isPassword = this.lockInputPassword.type === 'password';
+        this.lockInputPassword.type = isPassword ? 'text' : 'password';
+        this.btnTogglePw.textContent = isPassword ? '🙈' : '👁️';
+      });
+    }
+
+    if (this.lockScreenForm) {
+      this.lockScreenForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleUnlockSubmit();
+      });
+    }
+
+    if (this.lockSetupForm) {
+      this.lockSetupForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleSetupPasswordSubmit();
+      });
+    }
+
+    if (this.btnLockApp) {
+      this.btnLockApp.addEventListener('click', () => this.lockApp());
+    }
+
+    if (this.btnChangePassword) {
+      this.btnChangePassword.addEventListener('click', () => this.openChangePasswordModal());
+    }
+
+    if (this.btnCloseChangePw) {
+      this.btnCloseChangePw.addEventListener('click', () => this.closeChangePasswordModal());
+    }
+
+    if (this.changePwModal) {
+      this.changePwModal.addEventListener('click', (e) => {
+        if (e.target === this.changePwModal) {
+          this.closeChangePasswordModal();
+        }
+      });
+    }
+
+    if (this.changePwForm) {
+      this.changePwForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleChangePasswordSubmit();
+      });
+    }
   }
 
   switchTab(tabId) {
@@ -1012,6 +1111,236 @@ class VocabApp {
       this.fileImportInput.value = '';
     };
     reader.readAsText(file);
+  }
+
+  // =========================================================================
+  // Authentication & Lock Screen System
+  // =========================================================================
+  async checkAuthStatus() {
+    const masterHash = localStorage.getItem(STORAGE_AUTH_HASH);
+    if (!masterHash) {
+      // First-time visit: no password set yet, prompt user to create master password
+      this.showLockSetupScreen();
+      return;
+    }
+
+    const sessionAuth = sessionStorage.getItem(SESSION_AUTH);
+    const rememberedHash = localStorage.getItem(STORAGE_REMEMBER_AUTH);
+
+    if (sessionAuth === 'true' || (rememberedHash && rememberedHash === masterHash)) {
+      this.unlockApp(false);
+    } else {
+      this.showUnlockScreen();
+    }
+  }
+
+  showLockSetupScreen() {
+    this.isLocked = true;
+    if (this.appWrapper) this.appWrapper.classList.add('is-locked');
+    if (this.lockScreenOverlay) this.lockScreenOverlay.classList.remove('hidden');
+    if (this.lockScreenForm) this.lockScreenForm.style.display = 'none';
+    if (this.lockSetupForm) this.lockSetupForm.style.display = 'flex';
+    if (this.lockScreenTitle) this.lockScreenTitle.textContent = 'Thiết Lập Mật Khẩu';
+    if (this.lockScreenDesc) this.lockScreenDesc.textContent = 'Ứng dụng chưa có mật khẩu bảo vệ. Hãy tạo mật khẩu quản trị của bạn.';
+    if (this.setupErrorMsg) {
+      this.setupErrorMsg.textContent = '';
+      this.setupErrorMsg.style.display = 'none';
+    }
+    if (this.lockSetupPassword) {
+      this.lockSetupPassword.value = '';
+      setTimeout(() => this.lockSetupPassword.focus(), 100);
+    }
+    if (this.lockSetupConfirm) this.lockSetupConfirm.value = '';
+  }
+
+  showUnlockScreen() {
+    this.isLocked = true;
+    if (this.appWrapper) this.appWrapper.classList.add('is-locked');
+    if (this.lockScreenOverlay) this.lockScreenOverlay.classList.remove('hidden');
+    if (this.lockSetupForm) this.lockSetupForm.style.display = 'none';
+    if (this.lockScreenForm) this.lockScreenForm.style.display = 'flex';
+    if (this.lockScreenTitle) this.lockScreenTitle.textContent = 'Bảo Mật Cá Nhân';
+    if (this.lockScreenDesc) this.lockScreenDesc.textContent = 'Vui lòng nhập mật khẩu để mở khóa ứng dụng';
+    if (this.lockErrorMsg) {
+      this.lockErrorMsg.textContent = '';
+      this.lockErrorMsg.style.display = 'none';
+    }
+    if (this.lockInputPassword) {
+      this.lockInputPassword.value = '';
+      setTimeout(() => this.lockInputPassword.focus(), 100);
+    }
+  }
+
+  unlockApp(animate = true) {
+    this.isLocked = false;
+    sessionStorage.setItem(SESSION_AUTH, 'true');
+    if (this.appWrapper) this.appWrapper.classList.remove('is-locked');
+    if (this.lockScreenOverlay) {
+      this.lockScreenOverlay.classList.add('hidden');
+    }
+    if (this.lockInputPassword) this.lockInputPassword.value = '';
+    if (this.lockErrorMsg) this.lockErrorMsg.style.display = 'none';
+    if (this.setupErrorMsg) this.setupErrorMsg.style.display = 'none';
+  }
+
+  lockApp() {
+    this.isLocked = true;
+    sessionStorage.removeItem(SESSION_AUTH);
+    localStorage.removeItem(STORAGE_REMEMBER_AUTH);
+    this.showUnlockScreen();
+    this.showToast('Đã khóa ứng dụng an toàn!', 'info');
+  }
+
+  async handleUnlockSubmit() {
+    if (!this.lockInputPassword) return;
+    const pwd = this.lockInputPassword.value.trim();
+    if (!pwd) {
+      this.showLockError('Vui lòng nhập mật khẩu!');
+      return;
+    }
+
+    try {
+      const inputHash = await hashPassword(pwd);
+      const masterHash = localStorage.getItem(STORAGE_AUTH_HASH);
+
+      if (inputHash === masterHash) {
+        if (this.lockRememberMe && this.lockRememberMe.checked) {
+          localStorage.setItem(STORAGE_REMEMBER_AUTH, masterHash);
+        } else {
+          localStorage.removeItem(STORAGE_REMEMBER_AUTH);
+        }
+        this.unlockApp(true);
+        this.showToast('Mở khóa thành công! Chúc bạn học tốt.', 'success');
+      } else {
+        this.showLockError('Mật khẩu không chính xác. Vui lòng thử lại!');
+        this.lockInputPassword.value = '';
+        this.lockInputPassword.focus();
+      }
+    } catch (e) {
+      console.error('Error verifying password:', e);
+      this.showLockError('Có lỗi xảy ra khi xác thực mật khẩu.');
+    }
+  }
+
+  showLockError(msg) {
+    if (this.lockErrorMsg) {
+      this.lockErrorMsg.textContent = msg;
+      this.lockErrorMsg.style.display = 'block';
+    }
+  }
+
+  async handleSetupPasswordSubmit() {
+    const pwd = this.lockSetupPassword ? this.lockSetupPassword.value.trim() : '';
+    const confirm = this.lockSetupConfirm ? this.lockSetupConfirm.value.trim() : '';
+
+    if (!pwd) {
+      this.showSetupError('Vui lòng nhập mật khẩu mới!');
+      return;
+    }
+    if (pwd.length < 4) {
+      this.showSetupError('Mật khẩu cần có ít nhất 4 ký tự.');
+      return;
+    }
+    if (pwd !== confirm) {
+      this.showSetupError('Mật khẩu xác nhận không trùng khớp!');
+      return;
+    }
+
+    try {
+      const masterHash = await hashPassword(pwd);
+      localStorage.setItem(STORAGE_AUTH_HASH, masterHash);
+      localStorage.setItem(STORAGE_REMEMBER_AUTH, masterHash);
+      this.unlockApp(true);
+      this.showToast('Đã thiết lập mật khẩu bảo mật thành công!', 'success');
+    } catch (e) {
+      console.error('Error setting master password:', e);
+      this.showSetupError('Có lỗi xảy ra khi tạo mật khẩu.');
+    }
+  }
+
+  showSetupError(msg) {
+    if (this.setupErrorMsg) {
+      this.setupErrorMsg.textContent = msg;
+      this.setupErrorMsg.style.display = 'block';
+    }
+  }
+
+  openChangePasswordModal() {
+    if (this.isLocked) return;
+    if (this.changePwModal) {
+      this.changePwModal.style.display = 'flex';
+      if (this.inputOldPw) this.inputOldPw.value = '';
+      if (this.inputNewPw) this.inputNewPw.value = '';
+      if (this.inputConfirmPw) this.inputConfirmPw.value = '';
+      if (this.changePwErrorMsg) {
+        this.changePwErrorMsg.textContent = '';
+        this.changePwErrorMsg.style.display = 'none';
+      }
+      setTimeout(() => {
+        if (this.inputOldPw) this.inputOldPw.focus();
+      }, 50);
+    }
+  }
+
+  closeChangePasswordModal() {
+    if (this.changePwModal) {
+      this.changePwModal.style.display = 'none';
+    }
+  }
+
+  async handleChangePasswordSubmit() {
+    const oldPw = this.inputOldPw ? this.inputOldPw.value.trim() : '';
+    const newPw = this.inputNewPw ? this.inputNewPw.value.trim() : '';
+    const confirmPw = this.inputConfirmPw ? this.inputConfirmPw.value.trim() : '';
+
+    if (!oldPw) {
+      this.showChangePwError('Vui lòng nhập mật khẩu hiện tại!');
+      return;
+    }
+    if (!newPw) {
+      this.showChangePwError('Vui lòng nhập mật khẩu mới!');
+      return;
+    }
+    if (newPw.length < 4) {
+      this.showChangePwError('Mật khẩu mới cần có ít nhất 4 ký tự!');
+      return;
+    }
+    if (newPw !== confirmPw) {
+      this.showChangePwError('Mật khẩu xác nhận không khớp!');
+      return;
+    }
+
+    try {
+      const oldHash = await hashPassword(oldPw);
+      const masterHash = localStorage.getItem(STORAGE_AUTH_HASH);
+
+      if (masterHash && oldHash !== masterHash) {
+        this.showChangePwError('Mật khẩu hiện tại không chính xác!');
+        if (this.inputOldPw) this.inputOldPw.focus();
+        return;
+      }
+
+      const newHash = await hashPassword(newPw);
+      localStorage.setItem(STORAGE_AUTH_HASH, newHash);
+
+      // If user had "remember me" set, update it to the new hash
+      if (localStorage.getItem(STORAGE_REMEMBER_AUTH)) {
+        localStorage.setItem(STORAGE_REMEMBER_AUTH, newHash);
+      }
+
+      this.closeChangePasswordModal();
+      this.showToast('Đã đổi mật khẩu bảo mật thành công!', 'success');
+    } catch (e) {
+      console.error('Error changing password:', e);
+      this.showChangePwError('Có lỗi xảy ra khi đổi mật khẩu.');
+    }
+  }
+
+  showChangePwError(msg) {
+    if (this.changePwErrorMsg) {
+      this.changePwErrorMsg.textContent = msg;
+      this.changePwErrorMsg.style.display = 'block';
+    }
   }
 
   // Utility Toast Notifications
