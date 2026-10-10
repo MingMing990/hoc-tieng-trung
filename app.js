@@ -764,11 +764,11 @@ class VocabApp {
   handleAddVocabSubmit() {
     const hanzi = this.inputHanzi.value.trim();
     let pinyin = this.inputPinyin.value.trim();
-    const hanviet = this.inputHanviet.value.trim();
-    const meaningVn = this.inputMeaningVn.value.trim();
-    const meaningEn = this.inputMeaningEn.value.trim();
+    let hanviet = this.inputHanviet.value.trim();
+    let meaningVn = this.inputMeaningVn.value.trim();
+    let meaningEn = this.inputMeaningEn.value.trim();
     const exampleCn = this.inputExampleCn.value.trim();
-    const exampleVn = this.inputExampleVn.value.trim();
+    let exampleVn = this.inputExampleVn.value.trim();
 
     if (!hanzi) {
       this.showToast('Vui lòng nhập Hán tự!', 'error');
@@ -830,6 +830,7 @@ class VocabApp {
       this.exitEditMode();
       this.initReviewSession();
       this.renderVocabBank();
+      this.switchTab('bank');
       return;
     }
 
