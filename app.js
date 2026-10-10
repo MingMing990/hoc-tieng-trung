@@ -1270,7 +1270,20 @@ class VocabApp {
             if (doMerge) {
               const map = new Map();
               this.vocabList.forEach(item => map.set(item.hanzi, item));
-              sanitized.forEach(item => map.set(item.hanzi, item));
+              sanitized.forEach(item => {
+                const existing = map.get(item.hanzi);
+                if (existing) {
+                  // Cập nhật thông tin mới nhất từ file JSON, bảo toàn id và ngày tạo
+                  map.set(item.hanzi, {
+                    ...existing,
+                    ...item,
+                    id: existing.id || item.id,
+                    createdAt: existing.createdAt || item.createdAt
+                  });
+                } else {
+                  map.set(item.hanzi, item);
+                }
+              });
               finalList = Array.from(map.values());
             } else {
               finalList = sanitized;
