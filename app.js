@@ -8,8 +8,7 @@ const STORAGE_REMEMBER_AUTH = 'chinese_vocab_remember_auth';
 const SESSION_AUTH = 'chinese_vocab_session_auth';
 
 // Pre-configured Master Password Hash (SHA-256 with salt)
-// Mật khẩu chủ mặc định ban đầu: "123456"
-const DEFAULT_MASTER_PASSWORD_HASH = '675801870d23d5d54e76329b9cc7b0be8f895db36f189868d242200027a3e36c';
+const DEFAULT_MASTER_PASSWORD_HASH = 'c0ff5cca5f88fc1f987410a2c8374afb5215bb4fc2f9b3ef5939b67fcf7bb6e1';
 
 /**
  * SHA-256 password hashing with salt using Web Crypto API
