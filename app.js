@@ -166,9 +166,9 @@ class VocabApp {
   loadVocabList() {
     try {
       const saved = localStorage.getItem('chinese_vocab_list');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           // Normalize existing saved items so all follow the uppercase/lowercase/capitalize rules
           return parsed.map(normalizeVocabItem);
         }
@@ -197,6 +197,8 @@ class VocabApp {
     // Review Mode Elements
     this.reviewCard = document.getElementById('review-card');
     this.reviewCompletion = document.getElementById('review-completion');
+    this.reviewEmptyState = document.getElementById('review-empty-state');
+    this.btnEmptyRestoreSample = document.getElementById('btn-empty-restore-sample');
     this.reviewProgressText = document.getElementById('review-progress-text');
     this.reviewProgressBar = document.getElementById('review-progress-bar');
     this.reviewPromptVn = document.getElementById('review-prompt-vn');
@@ -265,6 +267,7 @@ class VocabApp {
     this.btnImportJson = document.getElementById('btn-import-json');
     this.fileImportInput = document.getElementById('file-import-input');
     this.btnResetSample = document.getElementById('btn-reset-sample');
+    this.btnClearAll = document.getElementById('btn-clear-all');
 
     // Global
     this.statTotalCount = document.getElementById('stat-total-count');
@@ -438,6 +441,7 @@ class VocabApp {
     this.btnNextWord.addEventListener('click', () => this.nextReviewWord());
     this.btnRestartReview.addEventListener('click', () => this.initReviewSession());
     this.btnAudioReview.addEventListener('click', () => {
+      if (this.reviewDeck.length === 0) return;
       const currentWord = this.reviewDeck[this.reviewIndex];
       if (currentWord) {
         this.speakChinese(currentWord.hanzi);
@@ -445,6 +449,7 @@ class VocabApp {
     });
     if (this.btnEditReview) {
       this.btnEditReview.addEventListener('click', () => {
+        if (this.reviewDeck.length === 0) return;
         const currentWord = this.reviewDeck[this.reviewIndex];
         if (currentWord) {
           this.editVocab(currentWord.id);
@@ -454,7 +459,7 @@ class VocabApp {
 
     // Keyboard Shortcuts for Review
     window.addEventListener('keydown', (e) => {
-      if (this.isLocked) return;
+      if (this.isLocked || this.vocabList.length === 0) return;
       const activeTab = document.querySelector('.tab-content.active');
       if (!activeTab || activeTab.id !== 'tab-review') return;
       
@@ -484,14 +489,31 @@ class VocabApp {
     this.fileImportInput.addEventListener('change', (e) => this.importVocabJson(e));
 
     // Reset Sample
-    this.btnResetSample.addEventListener('click', () => {
-      if (confirm('Khôi phục danh sách từ vựng mẫu HSK ban đầu? Các từ tự thêm sẽ được giữ nếu bạn xuất file sao lưu trước.')) {
+    if (this.btnResetSample) {
+      this.btnResetSample.addEventListener('click', () => {
+        if (confirm('Khôi phục danh sách từ vựng mẫu HSK ban đầu? Các từ tự thêm sẽ được giữ nếu bạn xuất file sao lưu trước.')) {
+          this.saveVocabList([...DEFAULT_VOCABULARY]);
+          this.renderVocabBank();
+          this.initReviewSession();
+          this.showToast('Đã khôi phục bộ từ vựng mẫu thành công!', 'success');
+        }
+      });
+    }
+
+    // Clear All Vocab
+    if (this.btnClearAll) {
+      this.btnClearAll.addEventListener('click', () => this.clearAllVocab());
+    }
+
+    // Empty State Restore Sample Button
+    if (this.btnEmptyRestoreSample) {
+      this.btnEmptyRestoreSample.addEventListener('click', () => {
         this.saveVocabList([...DEFAULT_VOCABULARY]);
         this.renderVocabBank();
         this.initReviewSession();
         this.showToast('Đã khôi phục bộ từ vựng mẫu thành công!', 'success');
-      }
-    });
+      });
+    }
 
     // Lock Screen & Security Events
     if (this.btnTogglePw && this.lockInputPassword) {
@@ -574,8 +596,10 @@ class VocabApp {
     });
 
     if (tabId === 'review') {
-      // If review deck is empty or finished, restart
-      if (this.reviewDeck.length === 0 || this.reviewIndex >= this.reviewDeck.length) {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (this.vocabList.length === 0) {
+        this.showEmptyState();
+      } else if (this.reviewDeck.length === 0 || this.reviewIndex >= this.reviewDeck.length) {
         this.initReviewSession();
       }
     } else if (tabId === 'bank') {
@@ -867,10 +891,16 @@ class VocabApp {
   // REVIEW ENGINE (FLASHCARD RANDOM QUEUE)
   // ==========================================
   initReviewSession() {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     if (this.vocabList.length === 0) {
+      this.reviewDeck = [];
+      this.reviewIndex = 0;
+      this.isCardRevealed = false;
       this.showEmptyState();
       return;
     }
+
+    if (this.reviewEmptyState) this.reviewEmptyState.style.display = 'none';
 
     // Shuffle vocabulary deck using Fisher-Yates
     this.reviewDeck = this.shuffleArray([...this.vocabList]);
@@ -890,6 +920,11 @@ class VocabApp {
   }
 
   renderCurrentReviewWord() {
+    if (this.vocabList.length === 0 || this.reviewDeck.length === 0) {
+      this.showEmptyState();
+      return;
+    }
+
     if (this.reviewIndex >= this.reviewDeck.length) {
       // Completed all words in the round!
       this.showCompletionScreen();
@@ -897,10 +932,16 @@ class VocabApp {
     }
 
     const word = this.reviewDeck[this.reviewIndex];
+    if (!word) {
+      this.showEmptyState();
+      return;
+    }
+
     const total = this.reviewDeck.length;
     const currentNum = this.reviewIndex + 1;
 
-    // Show review card, hide completion
+    // Show review card, hide completion & empty state
+    if (this.reviewEmptyState) this.reviewEmptyState.style.display = 'none';
     this.reviewCard.style.display = 'flex';
     this.reviewCompletion.style.display = 'none';
 
@@ -939,6 +980,7 @@ class VocabApp {
 
   revealReviewCard() {
     if (this.isCardRevealed) return;
+    if (this.reviewDeck.length === 0 || !this.reviewDeck[this.reviewIndex]) return;
 
     this.isCardRevealed = true;
     this.reviewRevealArea.classList.add('visible');
@@ -956,11 +998,14 @@ class VocabApp {
   }
 
   nextReviewWord() {
+    if (this.reviewDeck.length === 0) return;
     this.reviewIndex++;
     this.renderCurrentReviewWord();
   }
 
   showCompletionScreen() {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    if (this.reviewEmptyState) this.reviewEmptyState.style.display = 'none';
     this.reviewCard.style.display = 'none';
     this.reviewCompletion.style.display = 'flex';
     this.reviewProgressText.textContent = `Đã hoàn thành ${this.reviewDeck.length} / ${this.reviewDeck.length} từ`;
@@ -973,16 +1018,16 @@ class VocabApp {
   }
 
   showEmptyState() {
-    this.reviewCard.style.display = 'none';
-    this.reviewCompletion.style.display = 'flex';
-    this.reviewCompletion.innerHTML = `
-      <div class="celebration-icon">📖</div>
-      <h2 style="font-size: 1.5rem;">Chưa có từ vựng nào!</h2>
-      <p style="color: var(--text-secondary);">Hãy sang tab "Thêm từ mới" để nhập từ vựng tiếng Trung đầu tiên của bạn.</p>
-      <button class="reveal-btn" style="max-width: 250px; margin-top: 1rem;" onclick="app.switchTab('add')">
-        ➕ Thêm từ vựng ngay
-      </button>
-    `;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    this.reviewDeck = [];
+    this.reviewIndex = 0;
+    this.isCardRevealed = false;
+
+    if (this.reviewCard) this.reviewCard.style.display = 'none';
+    if (this.reviewCompletion) this.reviewCompletion.style.display = 'none';
+    if (this.reviewEmptyState) this.reviewEmptyState.style.display = 'flex';
+    if (this.reviewProgressText) this.reviewProgressText.textContent = '0 / 0 từ';
+    if (this.reviewProgressBar) this.reviewProgressBar.style.width = '0%';
   }
 
   // ==========================================
@@ -1059,11 +1104,26 @@ class VocabApp {
     if (!item) return;
 
     if (confirm(`Bạn có chắc chắn muốn xóa từ "${item.hanzi}" (${item.pinyin}) khỏi kho từ vựng không?`)) {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       const updated = this.vocabList.filter(x => x.id !== id);
       this.saveVocabList(updated);
       this.renderVocabBank();
       this.initReviewSession();
       this.showToast(`Đã xóa từ "${item.hanzi}".`, 'info');
+    }
+  }
+
+  clearAllVocab() {
+    if (this.vocabList.length === 0) {
+      this.showToast('Kho từ vựng hiện đang trống.', 'info');
+      return;
+    }
+    if (confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa TẤT CẢ từ vựng trong kho không? (Khuyên dùng: Bạn có thể bấm Xuất JSON để lưu bản dự phòng trước).')) {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      this.saveVocabList([]);
+      this.renderVocabBank();
+      this.initReviewSession();
+      this.showToast('Đã xóa toàn bộ từ vựng trong kho!', 'info');
     }
   }
 
