@@ -506,16 +506,9 @@ class VocabApp {
     this.btnImportJson.addEventListener('click', () => this.fileImportInput.click());
     this.fileImportInput.addEventListener('change', (e) => this.importVocabJson(e));
 
-    // Reset Sample
+    // Reset / Restore Sample
     if (this.btnResetSample) {
-      this.btnResetSample.addEventListener('click', () => {
-        if (confirm('Khôi phục danh sách từ vựng mẫu HSK ban đầu? Các từ tự thêm sẽ được giữ nếu bạn xuất file sao lưu trước.')) {
-          this.saveVocabList([...DEFAULT_VOCABULARY]);
-          this.renderVocabBank();
-          this.initReviewSession();
-          this.showToast('Đã khôi phục bộ từ vựng mẫu thành công!', 'success');
-        }
-      });
+      this.btnResetSample.addEventListener('click', () => this.restoreSampleVocab());
     }
 
     // Clear All Vocab
@@ -525,12 +518,7 @@ class VocabApp {
 
     // Empty State Restore Sample Button
     if (this.btnEmptyRestoreSample) {
-      this.btnEmptyRestoreSample.addEventListener('click', () => {
-        this.saveVocabList([...DEFAULT_VOCABULARY]);
-        this.renderVocabBank();
-        this.initReviewSession();
-        this.showToast('Đã khôi phục bộ từ vựng mẫu thành công!', 'success');
-      });
+      this.btnEmptyRestoreSample.addEventListener('click', () => this.restoreSampleVocab());
     }
 
     // Lock Screen & Security Events
@@ -1156,6 +1144,44 @@ class VocabApp {
     }
   }
 
+  restoreSampleVocab() {
+    if (!this.vocabList || this.vocabList.length === 0) {
+      const defaults = DEFAULT_VOCABULARY.map((item, idx) => normalizeVocabItem(item, idx)).filter(Boolean);
+      this.saveVocabList(defaults);
+      this.renderVocabBank();
+      this.initReviewSession();
+      this.showToast('Đã nạp 7 từ vựng mẫu HSK ban đầu thành công!', 'success');
+      return;
+    }
+
+    const confirmed = confirm(
+      `Khôi phục danh sách từ vựng mẫu HSK ban đầu:\n\n` +
+      `• Bấm [OK] để BỔ SUNG các từ mẫu vào kho (GIỮ NGUYÊN toàn bộ ${this.vocabList.length} từ bạn đã tự thêm).\n` +
+      `• Bấm [Cancel] để HỦY BỎ (Không thay đổi dữ liệu hiện tại).\n\n` +
+      `* Ghi chú: Nếu bạn muốn đặt lại kho chỉ còn 7 từ gốc và xóa hết từ khác, vui lòng bấm "🗑️ Xóa tất cả" trước rồi mới nạp lại mẫu.`
+    );
+
+    if (!confirmed) return;
+
+    // Tìm các từ mẫu chưa có trong danh sách hiện tại
+    const existingHanzi = new Set(this.vocabList.map(v => v.hanzi));
+    const toAdd = DEFAULT_VOCABULARY
+      .map((item, idx) => normalizeVocabItem(item, idx))
+      .filter(Boolean)
+      .filter(item => !existingHanzi.has(item.hanzi));
+
+    if (toAdd.length === 0) {
+      this.showToast('Tất cả 7 từ mẫu HSK đã có sẵn trong kho từ của bạn!', 'info');
+      return;
+    }
+
+    const updated = [...this.vocabList, ...toAdd];
+    this.saveVocabList(updated);
+    this.renderVocabBank();
+    this.initReviewSession();
+    this.showToast(`Đã bổ sung ${toAdd.length} từ mẫu HSK vào kho (Giữ nguyên toàn bộ từ bạn đã tự thêm)!`, 'success');
+  }
+
   updateStats() {
     const count = this.vocabList.length;
     if (this.statTotalCount) {
@@ -1233,11 +1259,29 @@ class VocabApp {
             return;
           }
 
+          let finalList = sanitized;
+          if (this.vocabList && this.vocabList.length > 0) {
+            const doMerge = confirm(
+              `Kho từ vựng của bạn hiện có ${this.vocabList.length} từ. File JSON có ${sanitized.length} từ.\n\n` +
+              `• Bấm [OK] để GỘP THÊM (Giữ các từ hiện tại và bổ sung từ mới từ file JSON)\n` +
+              `• Bấm [Cancel] để GHI ĐÈ THAY THẾ (Chỉ giữ từ trong file JSON, thay thế kho hiện tại)`
+            );
+
+            if (doMerge) {
+              const map = new Map();
+              this.vocabList.forEach(item => map.set(item.hanzi, item));
+              sanitized.forEach(item => map.set(item.hanzi, item));
+              finalList = Array.from(map.values());
+            } else {
+              finalList = sanitized;
+            }
+          }
+
           // Save and refresh
-          this.saveVocabList(sanitized);
+          this.saveVocabList(finalList);
           this.renderVocabBank();
           this.initReviewSession();
-          this.showToast(`Đã nạp thành công ${sanitized.length} từ vựng từ file!`, 'success');
+          this.showToast(`Đã nạp thành công! Kho từ hiện có ${finalList.length} từ.`, 'success');
         } else {
           this.showToast('File JSON không đúng định dạng danh sách từ vựng!', 'error');
         }
