@@ -322,6 +322,22 @@ class VocabApp {
     this.changePwSyncInfo = document.getElementById('change-pw-sync-info');
     this.newMasterHashDisplay = document.getElementById('new-master-hash-display');
     this.btnCopyMasterHash = document.getElementById('btn-copy-master-hash');
+
+    // Quick Edit Modal Elements
+    this.quickEditModal = document.getElementById('quick-edit-modal');
+    this.quickEditForm = document.getElementById('quick-edit-form');
+    this.quickEditId = document.getElementById('quick-edit-id');
+    this.quickEditHanzi = document.getElementById('quick-edit-hanzi');
+    this.quickEditPinyin = document.getElementById('quick-edit-pinyin');
+    this.quickEditPinyinChip = document.getElementById('quick-edit-pinyin-chip');
+    this.quickEditHanviet = document.getElementById('quick-edit-hanviet');
+    this.quickEditMeaningVn = document.getElementById('quick-edit-meaning-vn');
+    this.quickEditMeaningEn = document.getElementById('quick-edit-meaning-en');
+    this.quickEditExampleCn = document.getElementById('quick-edit-example-cn');
+    this.quickEditExampleVn = document.getElementById('quick-edit-example-vn');
+    this.btnCloseQuickEdit = document.getElementById('btn-close-quick-edit');
+    this.btnCancelQuickEdit = document.getElementById('btn-cancel-quick-edit');
+    this.quickEditVocabId = null;
   }
 
   initTheme() {
@@ -470,7 +486,7 @@ class VocabApp {
         if (this.reviewDeck.length === 0) return;
         const currentWord = this.reviewDeck[this.reviewIndex];
         if (currentWord) {
-          this.editVocab(currentWord.id);
+          this.openQuickEditModal(currentWord.id);
         }
       });
     }
@@ -478,6 +494,16 @@ class VocabApp {
     // Keyboard Shortcuts for Review
     window.addEventListener('keydown', (e) => {
       if (this.isLocked || this.vocabList.length === 0) return;
+
+      // Close Quick Edit Modal on Escape
+      if (e.key === 'Escape' && this.quickEditModal && this.quickEditModal.style.display === 'flex') {
+        this.closeQuickEditModal();
+        return;
+      }
+
+      // If Quick Edit Modal is active, block review shortcuts
+      if (this.quickEditModal && this.quickEditModal.style.display === 'flex') return;
+
       const activeTab = document.querySelector('.tab-content.active');
       if (!activeTab || activeTab.id !== 'tab-review') return;
       
@@ -497,6 +523,56 @@ class VocabApp {
         }
       }
     });
+
+    // Quick Edit Modal Event Listeners
+    if (this.quickEditPinyin) {
+      this.quickEditPinyin.addEventListener('input', () => {
+        const val = this.quickEditPinyin.value;
+        const converted = formatPinyin(val);
+        if (val !== converted) {
+          this.quickEditPinyin.value = converted;
+        }
+        if (this.quickEditPinyinChip) {
+          this.quickEditPinyinChip.textContent = converted || '';
+        }
+      });
+    }
+
+    if (this.quickEditHanviet) {
+      this.quickEditHanviet.addEventListener('input', () => {
+        this.quickEditHanviet.value = formatHanViet(this.quickEditHanviet.value);
+      });
+    }
+
+    document.querySelectorAll('.modal-tone-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const char = btn.getAttribute('data-char');
+        this.insertModalToneChar(char);
+      });
+    });
+
+    if (this.quickEditForm) {
+      this.quickEditForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleQuickEditSubmit();
+      });
+    }
+
+    if (this.btnCloseQuickEdit) {
+      this.btnCloseQuickEdit.addEventListener('click', () => this.closeQuickEditModal());
+    }
+
+    if (this.btnCancelQuickEdit) {
+      this.btnCancelQuickEdit.addEventListener('click', () => this.closeQuickEditModal());
+    }
+
+    if (this.quickEditModal) {
+      this.quickEditModal.addEventListener('click', (e) => {
+        if (e.target === this.quickEditModal) {
+          this.closeQuickEditModal();
+        }
+      });
+    }
 
     // Bank Search
     this.bankSearchInput.addEventListener('input', () => this.renderVocabBank());
@@ -722,6 +798,144 @@ class VocabApp {
   }
 
   editVocab(id) {
+    this.openQuickEditModal(id);
+  }
+
+  openQuickEditModal(id) {
+    const item = this.vocabList.find(x => x.id === id);
+    if (!item) return;
+
+    this.quickEditVocabId = id;
+    if (this.quickEditId) this.quickEditId.value = id;
+    if (this.quickEditHanzi) this.quickEditHanzi.value = item.hanzi;
+    if (this.quickEditPinyin) this.quickEditPinyin.value = item.pinyin;
+    if (this.quickEditPinyinChip) this.quickEditPinyinChip.textContent = item.pinyin;
+    if (this.quickEditHanviet) this.quickEditHanviet.value = item.hanviet !== '-' ? item.hanviet : '';
+    if (this.quickEditMeaningVn) this.quickEditMeaningVn.value = item.meaningVn;
+    if (this.quickEditMeaningEn) this.quickEditMeaningEn.value = item.meaningEn !== '-' ? item.meaningEn : '';
+    if (this.quickEditExampleCn) this.quickEditExampleCn.value = item.exampleCn || '';
+    if (this.quickEditExampleVn) this.quickEditExampleVn.value = item.exampleVn || '';
+
+    if (this.quickEditModal) {
+      this.quickEditModal.style.display = 'flex';
+      setTimeout(() => {
+        if (this.quickEditHanzi) this.quickEditHanzi.focus();
+      }, 50);
+    }
+  }
+
+  closeQuickEditModal() {
+    if (this.quickEditModal) {
+      this.quickEditModal.style.display = 'none';
+    }
+    this.quickEditVocabId = null;
+  }
+
+  insertModalToneChar(char) {
+    if (!this.quickEditPinyin) return;
+    const input = this.quickEditPinyin;
+    const start = input.selectionStart || input.value.length;
+    const end = input.selectionEnd || input.value.length;
+    const val = input.value;
+    input.value = val.substring(0, start) + char + val.substring(end);
+    input.focus();
+    input.selectionStart = input.selectionEnd = start + char.length;
+    if (this.quickEditPinyinChip) {
+      this.quickEditPinyinChip.textContent = input.value;
+    }
+  }
+
+  handleQuickEditSubmit() {
+    const id = this.quickEditVocabId;
+    if (!id) return;
+
+    const hanzi = this.quickEditHanzi.value.trim();
+    let pinyin = this.quickEditPinyin.value.trim();
+    let hanviet = this.quickEditHanviet.value.trim();
+    let meaningVn = this.quickEditMeaningVn.value.trim();
+    let meaningEn = this.quickEditMeaningEn.value.trim();
+    const exampleCn = this.quickEditExampleCn.value.trim();
+    let exampleVn = this.quickEditExampleVn.value.trim();
+
+    if (!hanzi) {
+      this.showToast('Vui lòng nhập Hán tự!', 'error');
+      this.quickEditHanzi.focus();
+      return;
+    }
+    if (!pinyin) {
+      this.showToast('Vui lòng nhập Pinyin!', 'error');
+      this.quickEditPinyin.focus();
+      return;
+    }
+    if (!meaningVn) {
+      this.showToast('Vui lòng nhập ý nghĩa tiếng Việt!', 'error');
+      this.quickEditMeaningVn.focus();
+      return;
+    }
+
+    // Auto-update formatting rules:
+    pinyin = formatPinyin(pinyin);
+    hanviet = formatHanViet(hanviet);
+    meaningVn = capitalizeFirstLetter(meaningVn);
+    meaningEn = meaningEn ? capitalizeFirstLetter(meaningEn) : '-';
+    exampleVn = exampleVn ? capitalizeFirstLetter(exampleVn) : '';
+
+    // Check duplicate against existing vocabulary list (excluding current item)
+    const duplicate = this.vocabList.find(x => 
+      x && x.hanzi && x.hanzi.trim().toLowerCase() === hanzi.toLowerCase() &&
+      x.id !== id
+    );
+
+    if (duplicate) {
+      this.showToast(`Từ "${hanzi}" đã tồn tại trong kho từ vựng!`, 'warning');
+      return;
+    }
+
+    const index = this.vocabList.findIndex(x => x.id === id);
+    if (index === -1) return;
+
+    const updatedItem = {
+      ...this.vocabList[index],
+      hanzi,
+      pinyin,
+      hanviet: hanviet || '-',
+      meaningVn,
+      meaningEn: meaningEn || '-',
+      exampleCn: exampleCn || '',
+      exampleVn: exampleVn || '',
+      updatedAt: Date.now()
+    };
+
+    this.vocabList[index] = updatedItem;
+    this.saveVocabList(this.vocabList);
+
+    // CRITICAL: Update review deck in-place without wiping review progress!
+    if (this.reviewDeck && this.reviewDeck.length > 0) {
+      const currentReviewWord = this.reviewDeck[this.reviewIndex];
+      if (currentReviewWord && currentReviewWord.id === id) {
+        this.reviewDeck[this.reviewIndex] = updatedItem;
+        const wasRevealed = this.isCardRevealed;
+        this.renderCurrentReviewWord();
+        if (wasRevealed) {
+          this.revealReviewCard();
+        }
+      } else {
+        const deckIdx = this.reviewDeck.findIndex(x => x.id === id);
+        if (deckIdx !== -1) {
+          this.reviewDeck[deckIdx] = updatedItem;
+        }
+      }
+    }
+
+    // Refresh bank view
+    this.renderVocabBank();
+
+    // Close modal
+    this.closeQuickEditModal();
+    this.showToast(`Đã cập nhật thành công từ "${hanzi}"!`, 'success');
+  }
+
+  startFullFormEdit(id) {
     const item = this.vocabList.find(x => x.id === id);
     if (!item) return;
 
@@ -858,7 +1072,18 @@ class VocabApp {
       }
 
       this.exitEditMode();
-      this.initReviewSession();
+      // Update in reviewDeck without losing review progress!
+      if (this.reviewDeck && this.reviewDeck.length > 0) {
+        const deckIdx = this.reviewDeck.findIndex(x => x.id === this.editingVocabId);
+        if (deckIdx !== -1) {
+          this.reviewDeck[deckIdx] = { ...this.vocabList[index] };
+          if (deckIdx === this.reviewIndex) {
+            const wasRevealed = this.isCardRevealed;
+            this.renderCurrentReviewWord();
+            if (wasRevealed) this.revealReviewCard();
+          }
+        }
+      }
       this.renderVocabBank();
       this.switchTab('bank');
       return;
@@ -888,9 +1113,14 @@ class VocabApp {
 
     this.showToast(`Đã thêm thành công từ "${hanzi}"!`, 'success');
 
-    // Reshuffle and refresh views
-    this.initReviewSession();
-    this.renderVocabBank();
+    // If review deck is active, preserve progress and append new word
+    if (this.reviewDeck && this.reviewDeck.length > 0 && this.reviewIndex < this.reviewDeck.length) {
+      this.reviewDeck.push(newVocab);
+      this.renderVocabBank();
+    } else {
+      this.initReviewSession();
+      this.renderVocabBank();
+    }
   }
 
   // ==========================================
@@ -963,7 +1193,7 @@ class VocabApp {
     // Hide revealed details
     this.isCardRevealed = false;
     this.reviewRevealArea.classList.remove('visible');
-    if (this.btnEditReview) this.btnEditReview.style.display = 'none';
+    if (this.btnEditReview) this.btnEditReview.style.display = 'inline-flex';
 
     // Reset buttons
     this.btnReveal.style.display = 'flex';

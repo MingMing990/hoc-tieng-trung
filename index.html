@@ -386,6 +386,126 @@
     </div>
   </div>
 
+  <!-- Modal Dialog: Quick Edit Vocabulary (In-Place Edit without leaving Review / Bank) -->
+  <div class="modal-backdrop" id="quick-edit-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-quick-edit-title">
+    <div class="modal-dialog modal-dialog-edit">
+      <div class="modal-dialog-header">
+        <span class="modal-dialog-icon">✏️</span>
+        <h3 class="modal-dialog-title" id="modal-quick-edit-title">Chỉnh Sửa Từ Vựng</h3>
+        <button type="button" class="modal-close-icon-btn" id="btn-close-quick-edit" title="Đóng">&times;</button>
+      </div>
+
+      <form id="quick-edit-form" class="quick-edit-form" autocomplete="off">
+        <input type="hidden" id="quick-edit-id">
+
+        <div class="form-grid-2">
+          <!-- Hán tự -->
+          <div class="form-group">
+            <label for="quick-edit-hanzi" class="form-label">
+              <span>Chữ Hán (Hán tự) <span class="required-star">*</span></span>
+            </label>
+            <input type="text" id="quick-edit-hanzi" class="form-input hanzi-input" placeholder="Ví dụ: 学习" required>
+          </div>
+
+          <!-- Pinyin -->
+          <div class="form-group">
+            <label for="quick-edit-pinyin" class="form-label">
+              <span>Phiên âm Pinyin <span class="required-star">*</span></span>
+              <span class="pinyin-chip" id="quick-edit-pinyin-chip"></span>
+            </label>
+            <input type="text" id="quick-edit-pinyin" class="form-input" placeholder="Ví dụ: xue2 xi2" required>
+          </div>
+        </div>
+
+        <!-- Quick tone selection pills inside modal -->
+        <div class="modal-tone-bar">
+          <span class="tone-bar-label">Thêm nhanh thanh điệu:</span>
+          <div class="tone-pills-wrap">
+            <button type="button" class="modal-tone-btn" data-char="ā">ā</button>
+            <button type="button" class="modal-tone-btn" data-char="á">á</button>
+            <button type="button" class="modal-tone-btn" data-char="ǎ">ǎ</button>
+            <button type="button" class="modal-tone-btn" data-char="à">à</button>
+            <button type="button" class="modal-tone-btn" data-char="ē">ē</button>
+            <button type="button" class="modal-tone-btn" data-char="é">é</button>
+            <button type="button" class="modal-tone-btn" data-char="ě">ě</button>
+            <button type="button" class="modal-tone-btn" data-char="è">è</button>
+            <button type="button" class="modal-tone-btn" data-char="ī">ī</button>
+            <button type="button" class="modal-tone-btn" data-char="í">í</button>
+            <button type="button" class="modal-tone-btn" data-char="ǐ">ǐ</button>
+            <button type="button" class="modal-tone-btn" data-char="ì">ì</button>
+            <button type="button" class="modal-tone-btn" data-char="ō">ō</button>
+            <button type="button" class="modal-tone-btn" data-char="ó">ó</button>
+            <button type="button" class="modal-tone-btn" data-char="ǒ">ǒ</button>
+            <button type="button" class="modal-tone-btn" data-char="ò">ò</button>
+            <button type="button" class="modal-tone-btn" data-char="ū">ū</button>
+            <button type="button" class="modal-tone-btn" data-char="ú">ú</button>
+            <button type="button" class="modal-tone-btn" data-char="ǔ">ǔ</button>
+            <button type="button" class="modal-tone-btn" data-char="ù">ù</button>
+            <button type="button" class="modal-tone-btn" data-char="ü">ü</button>
+            <button type="button" class="modal-tone-btn" data-char="ǘ">ǘ</button>
+            <button type="button" class="modal-tone-btn" data-char="ǚ">ǚ</button>
+            <button type="button" class="modal-tone-btn" data-char="ǜ">ǜ</button>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <!-- Âm Hán Việt -->
+          <div class="form-group">
+            <label for="quick-edit-hanviet" class="form-label">
+              <span>Âm Hán - Việt</span>
+              <span class="label-hint">Tự in hoa</span>
+            </label>
+            <input type="text" id="quick-edit-hanviet" class="form-input" placeholder="Ví dụ: HỌC TẬP">
+          </div>
+
+          <!-- Nghĩa tiếng Việt -->
+          <div class="form-group">
+            <label for="quick-edit-meaning-vn" class="form-label">
+              <span>Ý nghĩa tiếng Việt <span class="required-star">*</span></span>
+            </label>
+            <input type="text" id="quick-edit-meaning-vn" class="form-input" placeholder="Ví dụ: Học tập, nghiên cứu..." required>
+          </div>
+        </div>
+
+        <!-- Nghĩa tiếng Anh -->
+        <div class="form-group">
+          <label for="quick-edit-meaning-en" class="form-label">
+            <span>Ý nghĩa tiếng Anh (English)</span>
+            <span class="label-hint">Tùy chọn</span>
+          </label>
+          <input type="text" id="quick-edit-meaning-en" class="form-input" placeholder="Ví dụ: To study, to learn...">
+        </div>
+
+        <!-- Ví dụ câu mẫu -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label for="quick-edit-example-cn" class="form-label">
+              <span>Câu ví dụ tiếng Trung</span>
+              <span class="label-hint">Tùy chọn</span>
+            </label>
+            <input type="text" id="quick-edit-example-cn" class="form-input" placeholder="Ví dụ: 我每天都在学习汉语。">
+          </div>
+          <div class="form-group">
+            <label for="quick-edit-example-vn" class="form-label">
+              <span>Dịch nghĩa câu ví dụ</span>
+              <span class="label-hint">Tùy chọn</span>
+            </label>
+            <input type="text" id="quick-edit-example-vn" class="form-input" placeholder="Ví dụ: Tôi học tiếng Trung mỗi ngày.">
+          </div>
+        </div>
+
+        <div class="modal-dialog-actions" style="margin-top: 1rem;">
+          <button type="button" class="btn-secondary" id="btn-cancel-quick-edit">
+            Hủy bỏ
+          </button>
+          <button type="submit" class="reveal-btn" style="width: auto; padding: 0.8rem 1.6rem;">
+            <span>💾</span> Lưu cập nhật
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Fullscreen Lock Screen Overlay -->
   <div class="lock-screen-overlay" id="lock-screen-overlay">
     <div class="lock-screen-card">
