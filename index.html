@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>华语 VocabMaster - Học Từ Vựng Tiếng Trung Thông Minh</title>
+  <meta name="description" content="Trang web học từ vựng tiếng Trung hiện đại: tự động chuyển thanh điệu Pinyin (ma1 -> mā), tra cứu âm Hán-Việt, ôn tập ngẫu nhiên flashcard thông minh.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-seal">华</div>
+        <div class="brand-text">
+          <h1>VocabMaster 华语</h1>
+          <p>Học từ vựng tiếng Trung &bull; Ôn tập thông minh</p>
+        </div>
+      </div>
+      <div class="header-controls">
+        <div class="stat-pill" id="stat-total-badge" title="Tổng số từ vựng trong kho">
+          <span>📚</span>
+          <span id="stat-total-count">0 từ</span>
+        </div>
+        <button class="icon-btn" id="theme-toggle-btn" aria-label="Đổi giao diện Sáng/Tối" title="Đổi giao diện">
+          ☀️
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Navigation Tabs -->
+    <nav class="tabs-nav" aria-label="Chế độ học tập">
+      <button class="tab-btn active" data-tab="review" id="tab-btn-review">
+        <span>🎓</span>
+        <span>Ôn tập Flashcard</span>
+      </button>
+      <button class="tab-btn" data-tab="add" id="tab-btn-add">
+        <span id="tab-add-icon">➕</span>
+        <span id="tab-add-title">Thêm từ mới</span>
+      </button>
+      <button class="tab-btn" data-tab="bank" id="tab-btn-bank">
+        <span>📚</span>
+        <span>Kho từ vựng</span>
+        <span class="tab-badge" id="tab-bank-badge">0</span>
+      </button>
+    </nav>
+
+    <!-- TAB 1: REVIEW MODE (FLASHCARD RANDOM) -->
+    <main>
+      <section class="tab-content active" id="tab-review" aria-label="Ôn tập từ vựng">
+        <div class="review-container">
+          <!-- Progress Header -->
+          <div class="review-progress-card">
+            <div class="progress-header">
+              <span id="review-progress-text">Từ 1 / 10</span>
+              <span style="font-size: 0.8rem; color: var(--accent-gold);">⚡ Xáo trộn ngẫu nhiên không lặp</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="review-progress-bar"></div>
+            </div>
+          </div>
+
+          <!-- Flashcard Core -->
+          <div class="flashcard" id="review-card">
+            <!-- Card Top Bar -->
+            <div class="card-top-info">
+              <span class="card-badge">❓ Thử thách trí nhớ</span>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button class="audio-trigger-btn" id="btn-edit-review" title="Chỉnh sửa từ này" style="display: none; font-size: 1.1rem; width: 44px; height: 44px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.35); color: #60a5fa;">
+                  ✏️
+                </button>
+                <button class="audio-trigger-btn" id="btn-audio-review" title="Nghe phát âm chuẩn (giọng Bắc Kinh)">
+                  🔊
+                </button>
+              </div>
+            </div>
+
+            <!-- Card Prompt: Initially Only Displays Meanings -->
+            <div class="card-prompt-area">
+              <p class="prompt-label">Ý nghĩa của từ (Việt - Anh):</p>
+              <h2 class="meaning-vn-huge" id="review-prompt-vn">Đang tải từ vựng...</h2>
+              <p class="meaning-en-sub" id="review-prompt-en"></p>
+            </div>
+
+            <!-- Card Reveal Area (Hanzi, Pinyin, Sino-Vietnamese) -->
+            <div class="card-reveal-area" id="review-reveal-area">
+              <div class="hanzi-display">
+                <span class="hanzi-char" id="review-hanzi">学习</span>
+              </div>
+              <div class="meta-badges-row">
+                <div class="pinyin-badge" id="review-pinyin">xué xí</div>
+                <div class="hanviet-badge" id="review-hanviet">HỌC TẬP</div>
+              </div>
+              <div class="word-example-box" id="review-example-box">
+                <p class="word-example-cn" id="review-example-cn"></p>
+                <p class="word-example-meaning" id="review-example-vn"></p>
+              </div>
+            </div>
+
+            <!-- Action Buttons: Reveal & Next -->
+            <div class="card-action-bar">
+              <button class="reveal-btn" id="btn-reveal-result">
+                <span>👁️</span>
+                <span>Hiện kết quả (Hoàn thành)</span>
+              </button>
+              
+              <div class="next-action-row">
+                <button class="next-btn" id="btn-next-word" style="display: none;">
+                  <span>Từ tiếp theo</span>
+                  <span>➡️</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p class="review-shortcuts-hint">
+            Mẹo phím tắt: Bấm <span class="kbd">Space</span> hoặc <span class="kbd">Enter</span> để hiện kết quả, sau đó bấm tiếp để qua từ mới.
+          </p>
+
+          <!-- Completion Screen (When finished all words) -->
+          <div class="completion-card" id="review-completion" style="display: none;">
+            <div class="celebration-icon">🎉</div>
+            <h2 style="font-size: 1.8rem; font-weight: 800;">Xuất sắc! Đã hoàn thành!</h2>
+            <p id="completed-count-text" style="color: var(--text-secondary); font-size: 1.05rem;">
+              Bạn đã ôn tập toàn bộ từ vựng trong lượt ngẫu nhiên này.
+            </p>
+            <div style="display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; justify-content: center;">
+              <button class="reveal-btn" id="btn-restart-review" style="width: auto; padding: 0.9rem 1.8rem;">
+                🔄 Ôn tập lại vòng mới
+              </button>
+              <button class="btn-secondary" onclick="app.switchTab('bank')" style="padding: 0.9rem 1.5rem;">
+                📚 Xem kho từ vựng
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: ADD VOCABULARY -->
+      <section class="tab-content" id="tab-add" aria-label="Thêm từ mới">
+        <div class="add-vocab-layout">
+          <!-- Form Card -->
+          <div class="form-card">
+            <!-- Editing Status Banner -->
+            <div class="editing-status-banner" id="editing-status-banner" style="display: none;">
+              <div>
+                <span>✏️ Đang chỉnh sửa từ: </span>
+                <strong id="editing-word-title"></strong>
+              </div>
+              <button type="button" class="btn-cancel-small" id="btn-cancel-edit-banner">❌ Hủy bỏ</button>
+            </div>
+
+            <div class="form-header">
+              <h2 id="form-heading-title"><span>➕</span> Thêm từ vựng tiếng Trung mới</h2>
+              <p id="form-heading-desc">Nhập thông tin từ vựng. Pinyin tự động chuyển thanh điệu theo số (ví dụ: ma1 &rarr; mā).</p>
+            </div>
+
+            <form id="vocab-form" class="vocab-form" autocomplete="off">
+              <!-- Hán tự -->
+              <div class="form-group">
+                <label for="input-hanzi" class="form-label">
+                  <span>Hán tự (Chữ Hán) <span class="required-star">*</span></span>
+                  <span class="label-hint">Ví dụ: 学习, 你好, 咖啡</span>
+                </label>
+                <input type="text" id="input-hanzi" class="form-input hanzi-input" placeholder="Nhập chữ Hán..." required autofocus>
+                
+                <!-- Duplicate warning inline badge -->
+                <div class="duplicate-warning-badge" id="hanzi-duplicate-warning" style="display: none;">
+                  <div>
+                    <span>⚠️ Từ này đã có trong kho: </span>
+                    <strong id="dup-hanzi-text"></strong>
+                    <span id="dup-meaning-text" style="color: var(--text-secondary); margin-left: 0.25rem;"></span>
+                  </div>
+                  <button type="button" class="btn-quick-edit-dup" id="btn-quick-edit-dup">✏️ Sửa từ này ngay</button>
+                </div>
+              </div>
+
+              <!-- Pinyin với tính năng tự động chuyển số thành thanh điệu -->
+              <div class="form-group">
+                <label for="input-pinyin" class="form-label">
+                  <span>Pinyin (Phiên âm quốc tế) <span class="required-star">*</span></span>
+                  <span class="label-hint">Gõ số 1-4 để có dấu (ma1 &rarr; mā)</span>
+                </label>
+                <div class="input-with-preview">
+                  <input type="text" id="input-pinyin" class="form-input" placeholder="Ví dụ gõ: xue2 xi2 hoặc ni3 hao3..." required>
+                  
+                  <div class="pinyin-helper-box">
+                    <div class="pinyin-preview-row">
+                      <span style="color: var(--text-secondary);">⚡ Tự động chuyển đổi:</span>
+                      <span class="pinyin-preview-chip" id="pinyin-live-chip">(Trống)</span>
+                    </div>
+                    
+                    <div class="tone-quick-buttons">
+                      <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center; margin-right: 0.2rem;">Chèn nhanh:</span>
+                      <button type="button" class="tone-pill-btn" data-char="ā">ā</button>
+                      <button type="button" class="tone-pill-btn" data-char="á">á</button>
+                      <button type="button" class="tone-pill-btn" data-char="ǎ">ǎ</button>
+                      <button type="button" class="tone-pill-btn" data-char="à">à</button>
+                      <button type="button" class="tone-pill-btn" data-char="ē">ē</button>
+                      <button type="button" class="tone-pill-btn" data-char="é">é</button>
+                      <button type="button" class="tone-pill-btn" data-char="ǐ">ǐ</button>
+                      <button type="button" class="tone-pill-btn" data-char="ō">ō</button>
+                      <button type="button" class="tone-pill-btn" data-char="ǔ">ǔ</button>
+                      <button type="button" class="tone-pill-btn" data-char="ǜ">ǜ (v4)</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Phiên âm Hán-Việt -->
+              <div class="form-group">
+                <label for="input-hanviet" class="form-label">
+                  <span>Phiên âm Hán - Việt</span>
+                  <span class="label-hint">Ví dụ: Học tập, Nhĩ hảo, Cà phê</span>
+                </label>
+                <input type="text" id="input-hanviet" class="form-input" placeholder="Nhập âm Hán-Việt...">
+              </div>
+
+              <!-- Ý nghĩa tiếng Việt & Ý nghĩa tiếng Anh -->
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="input-meaning-vn" class="form-label">
+                    <span>Ý nghĩa tiếng Việt <span class="required-star">*</span></span>
+                  </label>
+                  <input type="text" id="input-meaning-vn" class="form-input" placeholder="Ví dụ: Học tập, rèn luyện..." required>
+                </div>
+                <div class="form-group">
+                  <label for="input-meaning-en" class="form-label">
+                    <span>Ý nghĩa tiếng Anh (English)</span>
+                  </label>
+                  <input type="text" id="input-meaning-en" class="form-input" placeholder="Ví dụ: To study, to learn...">
+                </div>
+              </div>
+
+              <!-- Ví dụ câu mẫu (Tùy chọn) -->
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="input-example-cn" class="form-label">
+                    <span>Câu ví dụ tiếng Trung</span>
+                    <span class="label-hint">Tùy chọn</span>
+                  </label>
+                  <input type="text" id="input-example-cn" class="form-input" placeholder="Ví dụ: 我每天都在学习汉语。">
+                </div>
+                <div class="form-group">
+                  <label for="input-example-vn" class="form-label">
+                    <span>Dịch nghĩa câu ví dụ</span>
+                    <span class="label-hint">Tùy chọn</span>
+                  </label>
+                  <input type="text" id="input-example-vn" class="form-input" placeholder="Ví dụ: Tôi học tiếng Trung mỗi ngày.">
+                </div>
+              </div>
+
+              <div class="form-buttons-row">
+                <button type="submit" class="btn-submit-vocab" id="btn-submit-vocab" style="flex: 1;">
+                  <span id="submit-btn-icon">💾</span>
+                  <span id="submit-btn-text">Lưu từ vựng vào kho</span>
+                </button>
+                <button type="button" class="btn-cancel-edit" id="btn-cancel-edit-form" style="display: none;">
+                  <span>Hủy sửa</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Side Preview & Tips -->
+          <aside class="side-preview-card">
+            <h3 class="side-title"><span>👁️</span> Xem trước thẻ từ vựng</h3>
+            <div class="mini-preview-box">
+              <div class="mini-hanzi" id="preview-hanzi">学习</div>
+              <div class="mini-pinyin" id="preview-pinyin">xué xí</div>
+              <div class="mini-hanviet" id="preview-hanviet">HỌC TẬP</div>
+              <div class="mini-meaning-vn" id="preview-vn">Nghĩa tiếng Việt của từ</div>
+              <div class="mini-meaning-en" id="preview-en">English definition of the word</div>
+            </div>
+
+            <div class="guide-tips-box">
+              <strong>💡 Hướng dẫn nhập nhanh Pinyin:</strong>
+              <ul style="margin-left: 1.25rem; margin-top: 0.4rem; display: flex; flex-direction: column; gap: 0.3rem;">
+                <li>Gõ số <strong>1</strong> sau âm tiết: <code>ma1</code> &rarr; <code>mā</code> (Thanh 1)</li>
+                <li>Gõ số <strong>2</strong> sau âm tiết: <code>ma2</code> &rarr; <code>má</code> (Thanh 2)</li>
+                <li>Gõ số <strong>3</strong> sau âm tiết: <code>ma3</code> &rarr; <code>mǎ</code> (Thanh 3)</li>
+                <li>Gõ số <strong>4</strong> sau âm tiết: <code>ma4</code> &rarr; <code>mà</code> (Thanh 4)</li>
+                <li>Không gõ số hoặc số <strong>5</strong>: <code>de5</code> &rarr; <code>de</code> (Khinh thanh)</li>
+                <li>Gõ chữ <strong>v</strong> hoặc <strong>u:</strong> cho <strong>ü</strong>: <code>lv4</code> &rarr; <code>lǜ</code>, <code>nv3</code> &rarr; <code>nǚ</code></li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- TAB 3: VOCABULARY BANK -->
+      <section class="tab-content" id="tab-bank" aria-label="Kho từ vựng đã lưu">
+        <div class="bank-header-row">
+          <div class="bank-search-bar">
+            <span>🔍</span>
+            <input type="text" id="bank-search-input" placeholder="Tìm theo Hán tự, Pinyin, Hán-Việt hoặc nghĩa...">
+          </div>
+          <div class="bank-actions">
+            <button class="btn-secondary" id="btn-export-json" title="Xuất dữ liệu dự phòng">
+              <span>📤</span> Xuất JSON
+            </button>
+            <button class="btn-secondary" id="btn-import-json" title="Nhập dữ liệu từ file JSON">
+              <span>📥</span> Nhập JSON
+            </button>
+            <input type="file" id="file-import-input" accept=".json" style="display: none;">
+            <button class="btn-secondary btn-danger" id="btn-reset-sample" title="Khôi phục danh sách từ vựng mẫu HSK">
+              <span>🔄</span> Khôi phục mẫu
+            </button>
+          </div>
+        </div>
+
+        <div class="vocab-grid" id="bank-grid">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+    </main>
+
+    <!-- Floating Toast Container -->
+    <div class="toast-container" id="toast-container" aria-live="polite"></div>
+  </div>
+
+  <!-- Modal Dialog: Duplicate Vocabulary Alert -->
+  <div class="modal-backdrop" id="duplicate-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-dup-title">
+    <div class="modal-dialog">
+      <div class="modal-dialog-header">
+        <span class="modal-dialog-icon">⚠️</span>
+        <h3 class="modal-dialog-title" id="modal-dup-title">Từ Vựng Đã Tồn Tại!</h3>
+      </div>
+      <div class="modal-dialog-body">
+        <p>Từ Hán tự "<strong id="modal-dup-hanzi" style="color: var(--text-chinese); font-family: var(--font-hanzi); font-size: 1.4rem;"></strong>" đã có sẵn trong kho từ vựng từ trước:</p>
+        
+        <div class="modal-existing-details">
+          <div style="display: flex; gap: 0.75rem; align-items: baseline; margin-bottom: 0.4rem;">
+            <span id="modal-dup-pinyin" style="color: #60a5fa; font-weight: 700; font-size: 1.15rem;"></span>
+            <span id="modal-dup-hanviet" style="color: #34d399; font-weight: 600;"></span>
+          </div>
+          <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem;">
+            🇻🇳 <span id="modal-dup-vn"></span>
+          </div>
+          <div style="color: var(--text-secondary); font-size: 0.9rem;">
+            🇬🇧 <span id="modal-dup-en"></span>
+          </div>
+        </div>
+        <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted);">
+          Từ này đã tồn tại trong kho. Bạn có muốn chuyển sang chỉnh sửa thông tin của từ này không?
+        </p>
+      </div>
+      <div class="modal-dialog-actions">
+        <button type="button" class="btn-secondary" id="btn-modal-close">
+          Đóng &amp; Kiểm tra lại
+        </button>
+        <button type="button" class="reveal-btn" id="btn-modal-edit-existing" style="width: auto; padding: 0.75rem 1.4rem;">
+          <span>✏️</span> Chỉnh sửa từ này
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="pinyin.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
