@@ -172,6 +172,7 @@ class VocabApp {
     this.isLocked = true;
 
     this.initDOM();
+    this.initVoiceEngine();
     this.initTheme();
     this.bindEvents();
     this.updateStats();
@@ -475,6 +476,8 @@ class VocabApp {
     this.btnNextWord.addEventListener('click', () => this.nextReviewWord());
     this.btnRestartReview.addEventListener('click', () => this.initReviewSession());
     this.btnAudioReview.addEventListener('click', () => {
+      // Chỉ cho phép phát âm khi thẻ đã được lật kết quả (tránh lộ đáp án)
+      if (!this.isCardRevealed) return;
       if (this.reviewDeck.length === 0) return;
       const currentWord = this.reviewDeck[this.reviewIndex];
       if (currentWord) {
@@ -1194,6 +1197,7 @@ class VocabApp {
     this.isCardRevealed = false;
     this.reviewRevealArea.classList.remove('visible');
     if (this.btnEditReview) this.btnEditReview.style.display = 'inline-flex';
+    if (this.btnAudioReview) this.btnAudioReview.style.display = 'none';
 
     // Reset buttons
     this.btnReveal.style.display = 'flex';
@@ -1221,10 +1225,11 @@ class VocabApp {
     this.isCardRevealed = true;
     this.reviewRevealArea.classList.add('visible');
 
-    // Switch buttons: hide Reveal button, display "Từ tiếp theo" button and "Chỉnh sửa" button
+    // Switch buttons: hide Reveal button, display "Từ tiếp theo", "Chỉnh sửa" and "Phát âm"
     this.btnReveal.style.display = 'none';
     this.btnNextWord.style.display = 'inline-flex';
     if (this.btnEditReview) this.btnEditReview.style.display = 'inline-flex';
+    if (this.btnAudioReview) this.btnAudioReview.style.display = 'inline-flex';
 
     // Auto-pronounce Hanzi audio
     const currentWord = this.reviewDeck[this.reviewIndex];
@@ -1424,21 +1429,84 @@ class VocabApp {
   }
 
   // ==========================================
-  // SPEECH SYNTHESIS (CHINESE VOICE)
+  // SPEECH SYNTHESIS (STANDARD MANDARIN VOICE)
   // ==========================================
+  initVoiceEngine() {
+    this.mandarinVoice = null;
+    const findStandardMandarinVoice = () => {
+      if (!('speechSynthesis' in window)) return;
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) return;
+
+      // 1. Tuyệt đối loại trừ giọng Quảng Đông (zh-HK, yue) hoặc Macau (zh-MO)
+      const isNotCantonese = (v) => {
+        const lang = (v.lang || '').toLowerCase().replace(/_/g, '-');
+        const name = (v.name || '').toLowerCase();
+        return !lang.includes('hk') && !lang.includes('mo') && !lang.includes('yue') && 
+               !name.includes('hong kong') && !name.includes('cantonese');
+      };
+
+      // 2. Tìm giọng chuẩn Trung Quốc Đại Lục (zh-CN, cmn-Hans, cmn-CN) với chất lượng cao (Natural/Neural/Online)
+      const highQualityVoices = voices.filter(v => {
+        const lang = (v.lang || '').toLowerCase().replace(/_/g, '-');
+        const name = (v.name || '').toLowerCase();
+        return isNotCantonese(v) && 
+               (lang === 'zh-cn' || lang === 'cmn-cn' || lang === 'cmn-hans-cn' || lang.startsWith('zh-cn')) &&
+               (name.includes('natural') || name.includes('online') || name.includes('neural') ||
+                name.includes('xiaoxiao') || name.includes('yunxi') || name.includes('yunyang') ||
+                name.includes('google') || name.includes('普通话') || name.includes('huihui'));
+      });
+
+      if (highQualityVoices.length > 0) {
+        this.mandarinVoice = highQualityVoices[0];
+        return;
+      }
+
+      // 3. Tìm bất kỳ giọng zh-CN chuẩn nào
+      const zhCnVoices = voices.filter(v => {
+        const lang = (v.lang || '').toLowerCase().replace(/_/g, '-');
+        return isNotCantonese(v) && (lang === 'zh-cn' || lang === 'cmn-cn' || lang === 'cmn-hans-cn' || lang.startsWith('zh-cn'));
+      });
+
+      if (zhCnVoices.length > 0) {
+        this.mandarinVoice = zhCnVoices[0];
+        return;
+      }
+
+      // 4. Tìm giọng tiếng Trung chung (bỏ qua Cantonese)
+      const generalZhVoices = voices.filter(v => {
+        const lang = (v.lang || '').toLowerCase();
+        return isNotCantonese(v) && (lang.startsWith('zh') || lang.startsWith('cmn'));
+      });
+
+      if (generalZhVoices.length > 0) {
+        this.mandarinVoice = generalZhVoices[0];
+      }
+    };
+
+    findStandardMandarinVoice();
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        findStandardMandarinVoice();
+      };
+    }
+  }
+
   speakChinese(text) {
     if (!text || !('speechSynthesis' in window)) return;
 
     window.speechSynthesis.cancel(); // Stop previous
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'zh-CN'; // Standard Mandarin
+    utterance.lang = 'zh-CN'; // Standard Mandarin (Mainland China)
     utterance.rate = 0.85; // Slightly slower for clear pronunciation learning
+    utterance.pitch = 1.0;
 
-    // Try finding specific Chinese voice if available
-    const voices = window.speechSynthesis.getVoices();
-    const zhVoice = voices.find(v => v.lang.includes('zh') || v.lang.includes('cmn'));
-    if (zhVoice) {
-      utterance.voice = zhVoice;
+    if (!this.mandarinVoice && 'speechSynthesis' in window) {
+      this.initVoiceEngine();
+    }
+
+    if (this.mandarinVoice) {
+      utterance.voice = this.mandarinVoice;
     }
 
     window.speechSynthesis.speak(utterance);
