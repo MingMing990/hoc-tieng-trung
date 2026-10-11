@@ -1544,8 +1544,13 @@ class VocabApp {
     return localStorage.getItem(STORAGE_AUTH_HASH) || DEFAULT_MASTER_PASSWORD_HASH;
   }
 
+  async generateSessionToken(masterHash) {
+    return await hashPassword(masterHash + "_chinesevocab_active_session_token_2026");
+  }
+
   async checkAuthStatus() {
     const masterHash = this.getMasterHash();
+    const expectedSessionToken = await this.generateSessionToken(masterHash);
     const sessionAuth = sessionStorage.getItem(SESSION_AUTH);
     const rememberedHash = localStorage.getItem(STORAGE_REMEMBER_AUTH);
 
@@ -1557,9 +1562,14 @@ class VocabApp {
       return;
     }
 
-    if (sessionAuth === 'true' || (rememberedHash && rememberedHash === masterHash)) {
-      this.unlockApp(false);
+    const isSessionValid = (sessionAuth === expectedSessionToken);
+    const isRememberValid = (rememberedHash === masterHash);
+
+    if (isSessionValid || isRememberValid) {
+      sessionStorage.setItem(SESSION_AUTH, expectedSessionToken);
+      this.doUnlockUI();
     } else {
+      sessionStorage.removeItem(SESSION_AUTH);
       this.showUnlockScreen();
     }
   }
@@ -1601,9 +1611,8 @@ class VocabApp {
     }
   }
 
-  unlockApp(animate = true) {
+  doUnlockUI() {
     this.isLocked = false;
-    sessionStorage.setItem(SESSION_AUTH, 'true');
     if (this.appWrapper) this.appWrapper.classList.remove('is-locked');
     if (this.lockScreenOverlay) {
       this.lockScreenOverlay.classList.add('hidden');
@@ -1611,6 +1620,23 @@ class VocabApp {
     if (this.lockInputPassword) this.lockInputPassword.value = '';
     if (this.lockErrorMsg) this.lockErrorMsg.style.display = 'none';
     if (this.setupErrorMsg) this.setupErrorMsg.style.display = 'none';
+  }
+
+  async unlockApp(token = null) {
+    const masterHash = this.getMasterHash();
+    const expectedToken = await this.generateSessionToken(masterHash);
+    const currentToken = token || sessionStorage.getItem(SESSION_AUTH);
+
+    if (currentToken !== expectedToken) {
+      console.warn('Cảnh báo bảo mật: Yêu cầu mở khóa không hợp lệ!');
+      sessionStorage.removeItem(SESSION_AUTH);
+      this.showUnlockScreen();
+      return false;
+    }
+
+    sessionStorage.setItem(SESSION_AUTH, expectedToken);
+    this.doUnlockUI();
+    return true;
   }
 
   lockApp() {
@@ -1639,7 +1665,9 @@ class VocabApp {
         } else {
           localStorage.removeItem(STORAGE_REMEMBER_AUTH);
         }
-        this.unlockApp(true);
+        const sessionToken = await this.generateSessionToken(masterHash);
+        sessionStorage.setItem(SESSION_AUTH, sessionToken);
+        this.doUnlockUI();
         this.showToast('Mở khóa thành công! Chúc bạn học tốt.', 'success');
       } else {
         this.showLockError('Mật khẩu không chính xác. Vui lòng thử lại!');
@@ -1680,7 +1708,9 @@ class VocabApp {
       const masterHash = await hashPassword(pwd);
       localStorage.setItem(STORAGE_AUTH_HASH, masterHash);
       localStorage.setItem(STORAGE_REMEMBER_AUTH, masterHash);
-      this.unlockApp(true);
+      const sessionToken = await this.generateSessionToken(masterHash);
+      sessionStorage.setItem(SESSION_AUTH, sessionToken);
+      this.doUnlockUI();
       this.showToast('Đã thiết lập mật khẩu bảo mật thành công!', 'success');
     } catch (e) {
       console.error('Error setting master password:', e);
@@ -1755,6 +1785,9 @@ class VocabApp {
 
       const newHash = await hashPassword(newPw);
       localStorage.setItem(STORAGE_AUTH_HASH, newHash);
+
+      const newSessionToken = await this.generateSessionToken(newHash);
+      sessionStorage.setItem(SESSION_AUTH, newSessionToken);
 
       // If user had "remember me" set, update it to the new hash
       if (localStorage.getItem(STORAGE_REMEMBER_AUTH)) {
