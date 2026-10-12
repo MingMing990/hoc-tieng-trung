@@ -1,0 +1,11 @@
+# Hệ điều hành & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# File nhật ký / scratch
+*.log
+
+# Cấu hình Firebase nhạy cảm (bỏ comment dòng dưới khi muốn ẩn khỏi git commit)
+# firebase-config.js

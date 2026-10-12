@@ -1560,32 +1560,5 @@ header.app-header {
 }
 
 
-/* GitHub Sync Status */
-.github-status-msg {
-  padding: 0.6rem 0.85rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-align: left;
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-}
 
-.github-status-msg.ok {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.35);
-  color: #6ee7b7;
-}
 
-.github-status-msg.pending,
-.github-status-msg.syncing {
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.35);
-  color: #93c5fd;
-}
-
-.github-status-msg.error {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #fca5a5;
-}

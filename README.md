@@ -82,24 +82,30 @@ Nhấp đúp chuột vào file [`index.html`](file:///e:/WORK/Projects/VibeCode/
 
 ---
 
-## 🔄 Đồng Bộ Từ Vựng Với GitHub (`vocab.json`)
+## ⚡ Đồng Bộ Thời Gian Thực Đa Thiết Bị Với Firebase Realtime Database
 
-Từ vựng được lưu trong `localStorage` của từng trình duyệt, đồng thời đồng bộ với file `vocab.json` trong repo.
+Từ vựng được lưu trữ trên Cloud và **tự động đồng bộ tức thì (< 0.5s)** giữa máy tính, điện thoại và máy tính bảng. Khi mở nhiều thiết bị cùng lúc, thêm hoặc sửa từ trên máy tính thì điện thoại sẽ nhận ngay lập tức mà không cần tải lại trang.
 
-### Kết nối một lần trên mỗi thiết bị (tự lưu lên GitHub)
-1. Tạo token tại https://github.com/settings/personal-access-tokens/new:
-   - **Repository access**: *Only select repositories* → chọn repo này.
-   - **Permissions → Contents**: *Read and write*.
-2. Mở app, bấm nút **🔗** trên thanh tiêu đề, dán token, bấm **Lưu & Đồng bộ**.
-3. Từ đó, mỗi lần thêm / sửa / xóa từ, app tự commit `vocab.json` lên repo (gom các thay đổi trong ~2 giây thành 1 commit). Biểu tượng trên header: ☁️ đã đồng bộ, ⏳ đang lưu, ⚠️ lỗi (bấm vào để xem chi tiết).
+### 1. Kết nối Firebase trong 2 phút (Miễn phí 100%)
+1. Truy cập [console.firebase.google.com](https://console.firebase.google.com/) và bấm **Thêm dự án (Add project)**.
+2. Vào menu bên trái: **Build &rarr; Realtime Database** &rarr; Bấm **Tạo cơ sở dữ liệu (Create Database)**.
+3. Chuyển sang tab **Rules (Quy tắc)** và cấu hình cho phép đọc/ghi:
+   ```json
+   {
+     "rules": {
+       ".read": true,
+       ".write": true
+     }
+   }
+   ```
+4. Bấm vào biểu tượng ⚙️ **Cài đặt dự án (Project settings)** &rarr; cuộn xuống mục **Ứng dụng của bạn** &rarr; chọn biểu tượng Web `</>` &rarr; copy đoạn mã `const firebaseConfig = { ... }`.
+5. Mở app, bấm biểu tượng **🔥** trên thanh tiêu đề, dán cấu hình vào ô và bấm **Lưu & Bật Realtime**.
 
-### Cách gộp dữ liệu
-- Từ có ở cả máy và repo: giữ bản được sửa sau cùng.
-- Từ thêm hoặc xóa ở thiết bị khác sẽ được thêm hoặc xóa trên máy này ở lần đồng bộ sau; từ đã xóa không bị "hồi sinh".
-- Thiết bị chưa kết nối vẫn tự **đọc** `vocab.json` từ GitHub Pages khi mở app, nhưng không ghi được.
+### 2. Cấu hình sẵn trong mã nguồn (`firebase-config.js`)
+- Mở file [`firebase-config.js`](file:///d:/Code/duidui/chinese-vocab/firebase-config.js) và dán thông tin `firebaseConfig` của bạn vào `window.FIREBASE_CONFIG`.
+- Ứng dụng sẽ **tự động kết nối vĩnh viễn** trên bất kỳ thiết bị nào mở web mà không cần nhập lại bất kỳ cấu hình nào.
 
-> Lưu ý:
-> - Token chỉ lưu trên trình duyệt; chỉ kết nối trên thiết bị của riêng bạn. Bấm **Ngắt kết nối** để xóa token.
-> - GitHub Pages mất 1–2 phút để cập nhật sau mỗi commit (thiết bị chưa kết nối sẽ thấy từ mới chậm hơn).
-> - Trên máy local, nhớ `git pull` trước khi sửa code để lấy các commit `vocab.json` do app tạo.
-> - `vocab.json` nằm công khai trong repo. Có thể khôi phục bản cũ qua lịch sử commit.
+### 3. Cách gộp dữ liệu
+- Từ có ở cả máy và Cloud: giữ bản được sửa sau cùng.
+- Từ thêm hoặc xóa ở thiết bị khác sẽ được cập nhật tức thì trên tất cả các màn hình đang mở.
+- Quá trình ôn tập flashcard đang diễn ra vẫn giữ nguyên tiến độ khi có từ mới được đồng bộ về.

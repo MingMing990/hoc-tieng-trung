@@ -12,12 +12,65 @@ const REPO_VOCAB_URL = 'vocab.json';
 // Danh sách Hán tự của vocab.json ở lần đồng bộ trước, dùng để nhận biết từ đã bị xóa
 const STORAGE_REPO_BASE = 'chinese_vocab_repo_base';
 
-// GitHub Sync: tự commit vocab.json qua GitHub API (token chỉ lưu trên trình duyệt)
-const DEFAULT_GITHUB_REPO = 'MingMing990/chinese-vocab';
-const DEFAULT_GITHUB_BRANCH = 'main';
-const STORAGE_GITHUB_TOKEN = 'chinese_vocab_github_token';
-const STORAGE_GITHUB_REPO = 'chinese_vocab_github_repo';
-const STORAGE_GITHUB_BRANCH = 'chinese_vocab_github_branch';
+
+// Firebase Realtime Sync Storage Keys & Default Configuration
+const STORAGE_FIREBASE_CONFIG = 'chinese_vocab_firebase_config';
+const STORAGE_FIREBASE_ROOM = 'chinese_vocab_firebase_room';
+const DEFAULT_FIREBASE_ROOM = 'main';
+
+// Cấu hình Firebase mặc định sẵn trong code (sẽ tự động kết nối trên mọi thiết bị):
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDlzYsGt0dDFF6HzrLwRMg8BERG_rQD-zQ",
+  authDomain: "chinese-vocab-7d7c3.firebaseapp.com",
+  databaseURL: "https://chinese-vocab-7d7c3-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "chinese-vocab-7d7c3",
+  storageBucket: "chinese-vocab-7d7c3.firebasestorage.app",
+  messagingSenderId: "899875550896",
+  appId: "1:899875550896:web:784cb96a08984a83a6ed75",
+  measurementId: "G-04EPBW5VW9"
+};
+
+/**
+ * Trích xuất và phân tích cấu hình Firebase từ chuỗi nhập vào
+ * Hỗ trợ: JSON, đoạn mã JS (const firebaseConfig = { ... }), hoặc Object thuần
+ */
+function parseFirebaseConfig(text) {
+  if (!text || typeof text !== 'string') return null;
+  const trimmed = text.trim();
+  
+  // 1. Thử parse trực tiếp JSON
+  try {
+    const obj = JSON.parse(trimmed);
+    if (obj && typeof obj === 'object' && (obj.apiKey || obj.databaseURL || obj.projectId)) {
+      return obj;
+    }
+  } catch (e) {}
+
+  // 2. Tìm khối { ... } trong đoạn mã JS
+  const match = trimmed.match(/\{[\s\S]*\}/);
+  if (match) {
+    const rawObj = match[0];
+    try {
+      const fn = new Function(`return (${rawObj});`);
+      const evaluated = fn();
+      if (evaluated && typeof evaluated === 'object' && (evaluated.apiKey || evaluated.databaseURL || evaluated.projectId)) {
+        return evaluated;
+      }
+    } catch (e) {}
+
+    try {
+      const jsonCandidate = rawObj
+        .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?\s*:/g, '"$2":')
+        .replace(/:\s*'([^']*)'/g, ':"$1"')
+        .replace(/,\s*([}\]])/g, '$1');
+      const obj = JSON.parse(jsonCandidate);
+      if (obj && typeof obj === 'object' && (obj.apiKey || obj.databaseURL || obj.projectId)) {
+        return obj;
+      }
+    } catch (e) {}
+  }
+  return null;
+}
 
 // Pre-configured Master Password Hash (SHA-256 with salt)
 const DEFAULT_MASTER_PASSWORD_HASH = 'c0ff5cca5f88fc1f987410a2c8374afb5215bb4fc2f9b3ef5939b67fcf7bb6e1';
@@ -212,6 +265,14 @@ class VocabApp {
     // Security & Lock Screen State
     this.isLocked = true;
 
+    // Firebase Realtime State
+    this.firebaseDb = null;
+    this.firebaseVocabRef = null;
+    this.firebaseStatus = 'off';
+    this.firebasePushTimer = null;
+    this.hasPushedInitialFirebase = false;
+    this._fbListener = null;
+
     this.initDOM();
     this.initVoiceEngine();
     this.initTheme();
@@ -219,10 +280,8 @@ class VocabApp {
     this.updateStats();
     this.renderVocabBank();
     this.initReviewSession();
-    this.checkAuthStatus();
-    this.setGitHubStatus(this.getGitHubConfig() ? 'syncing' : 'off');
-    this.githubReady = true;
-    this.syncFromRepo();
+    this.checkMagicSyncLink();
+    this.initFirebase();
   }
 
   // Load from local storage or fallback to defaults
@@ -248,7 +307,10 @@ class VocabApp {
     this.vocabList = list;
     localStorage.setItem('chinese_vocab_list', JSON.stringify(list));
     this.updateStats();
-    this.scheduleGitHubPush();
+    if (!this.isApplyingRemote) {
+      this.scheduleFirebasePush();
+      this.scheduleGitHubPush();
+    }
   }
 
   initDOM() {
@@ -385,16 +447,18 @@ class VocabApp {
     this.btnCancelQuickEdit = document.getElementById('btn-cancel-quick-edit');
     this.quickEditVocabId = null;
 
-    // GitHub Sync Elements
-    this.btnGitHubSync = document.getElementById('btn-github-sync');
-    this.githubModal = document.getElementById('github-modal');
-    this.githubForm = document.getElementById('github-form');
-    this.githubTokenInput = document.getElementById('github-token-input');
-    this.githubRepoInput = document.getElementById('github-repo-input');
-    this.githubBranchInput = document.getElementById('github-branch-input');
-    this.githubStatusMsg = document.getElementById('github-status-msg');
-    this.btnGitHubDisconnect = document.getElementById('btn-github-disconnect');
-    this.btnCloseGitHub = document.getElementById('btn-close-github');
+
+    // Firebase Sync Elements
+    this.btnFirebaseSync = document.getElementById('btn-firebase-sync');
+    this.firebaseModal = document.getElementById('firebase-modal');
+    this.firebaseForm = document.getElementById('firebase-form');
+    this.firebaseConfigInput = document.getElementById('firebase-config-input');
+    this.firebaseRoomInput = document.getElementById('firebase-room-input');
+    this.firebaseStatusMsg = document.getElementById('firebase-status-msg');
+    this.firebaseConnectedTools = document.getElementById('firebase-connected-tools');
+    this.btnFirebaseShareLink = document.getElementById('btn-firebase-share-link');
+    this.btnFirebaseDisconnect = document.getElementById('btn-firebase-disconnect');
+    this.btnCloseFirebase = document.getElementById('btn-close-firebase');
   }
 
   initTheme() {
@@ -559,10 +623,13 @@ class VocabApp {
         this.closeQuickEditModal();
         return;
       }
-
+      if (e.key === 'Escape' && this.firebaseModal && this.firebaseModal.style.display === 'flex') {
+        this.closeFirebaseModal();
+        return;
+      }
       // If Quick Edit Modal is active, block review shortcuts
       if (this.quickEditModal && this.quickEditModal.style.display === 'flex') return;
-      if (this.githubModal && this.githubModal.style.display === 'flex') return;
+      if (this.firebaseModal && this.firebaseModal.style.display === 'flex') return;
 
       const activeTab = document.querySelector('.tab-content.active');
       if (!activeTab || activeTab.id !== 'tab-review') return;
@@ -707,27 +774,31 @@ class VocabApp {
       });
     }
 
-    // GitHub Sync
-    if (this.btnGitHubSync) {
-      this.btnGitHubSync.addEventListener('click', () => this.openGitHubModal());
+    // Firebase Realtime Sync
+    if (this.btnFirebaseSync) {
+      this.btnFirebaseSync.addEventListener('click', () => this.openFirebaseModal());
     }
-    if (this.githubForm) {
-      this.githubForm.addEventListener('submit', (e) => {
+    if (this.firebaseForm) {
+      this.firebaseForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        this.handleGitHubConnectSubmit();
+        this.handleFirebaseSubmit();
       });
     }
-    if (this.btnGitHubDisconnect) {
-      this.btnGitHubDisconnect.addEventListener('click', () => this.disconnectGitHub());
+    if (this.btnFirebaseDisconnect) {
+      this.btnFirebaseDisconnect.addEventListener('click', () => this.handleFirebaseDisconnect());
     }
-    if (this.btnCloseGitHub) {
-      this.btnCloseGitHub.addEventListener('click', () => this.closeGitHubModal());
+    if (this.btnFirebaseShareLink) {
+      this.btnFirebaseShareLink.addEventListener('click', () => this.copyFirebaseShareLink());
     }
-    if (this.githubModal) {
-      this.githubModal.addEventListener('click', (e) => {
-        if (e.target === this.githubModal) this.closeGitHubModal();
+    if (this.btnCloseFirebase) {
+      this.btnCloseFirebase.addEventListener('click', () => this.closeFirebaseModal());
+    }
+    if (this.firebaseModal) {
+      this.firebaseModal.addEventListener('click', (e) => {
+        if (e.target === this.firebaseModal) this.closeFirebaseModal();
       });
     }
+
 
     if (this.btnCopyMasterHash && this.newMasterHashDisplay) {
       this.btnCopyMasterHash.addEventListener('click', () => {
@@ -1591,32 +1662,6 @@ class VocabApp {
     window.speechSynthesis.speak(utterance);
   }
 
-  // ==========================================
-  // REPO SYNC (vocab.json)
-  // - Chưa kết nối GitHub: chỉ đọc vocab.json từ GitHub Pages (một chiều)
-  // - Đã kết nối GitHub (có token): đọc/ghi vocab.json qua GitHub API, tự commit
-  // ==========================================
-  async syncFromRepo() {
-    if (this.getGitHubConfig()) {
-      await this.syncWithGitHub();
-      return;
-    }
-    // fetch không hoạt động khi mở trực tiếp file index.html (file://)
-    if (location.protocol === 'file:') return;
-
-    let text;
-    try {
-      const res = await fetch(REPO_VOCAB_URL, { cache: 'no-cache' });
-      if (!res.ok) return; // Repo chưa có vocab.json
-      text = await res.text();
-    } catch (e) {
-      console.warn('Không tải được vocab.json:', e);
-      return;
-    }
-
-    const remoteItems = this.parseRemoteVocab(text);
-    if (remoteItems) this.applyRemoteMerge(remoteItems);
-  }
 
   parseRemoteVocab(text) {
     let list;
@@ -1746,215 +1791,299 @@ class VocabApp {
     if (wasRevealed) this.revealReviewCard();
   }
 
+
   // ==========================================
-  // GITHUB SYNC (tự commit vocab.json qua GitHub API)
+  // FIREBASE REALTIME SYNC (Đồng bộ tức thì đa thiết bị)
   // ==========================================
-  getGitHubConfig() {
-    const token = localStorage.getItem(STORAGE_GITHUB_TOKEN);
-    if (!token) return null;
-    return {
-      token,
-      repo: localStorage.getItem(STORAGE_GITHUB_REPO) || DEFAULT_GITHUB_REPO,
-      branch: localStorage.getItem(STORAGE_GITHUB_BRANCH) || DEFAULT_GITHUB_BRANCH
-    };
-  }
-
-  githubHeaders(cfg) {
-    return {
-      'Authorization': `Bearer ${cfg.token}`,
-      'Accept': 'application/vnd.github+json'
-    };
-  }
-
-  describeGitHubError(status) {
-    if (status === 401) return 'Token không hợp lệ hoặc đã hết hạn.';
-    if (status === 403) return 'Token không có quyền ghi (cần Contents: Read and write) hoặc đã vượt giới hạn truy cập.';
-    if (status === 404) return 'Không tìm thấy repo/nhánh, hoặc token chưa được cấp quyền cho repo này.';
-    return `GitHub trả về lỗi ${status}.`;
-  }
-
-  async githubGetFile(cfg) {
-    const url = `https://api.github.com/repos/${cfg.repo}/contents/${REPO_VOCAB_URL}?ref=${encodeURIComponent(cfg.branch)}`;
-    const res = await fetch(url, { headers: this.githubHeaders(cfg), cache: 'no-store' });
-    if (res.status === 404) return { text: null, sha: null }; // Repo chưa có vocab.json
-    if (!res.ok) throw new Error(this.describeGitHubError(res.status));
-    const data = await res.json();
-
-    let content = data.content;
-    if (!content && data.size > 0) {
-      // File trên 1MB: API contents không trả nội dung, phải lấy qua git blob
-      const blobRes = await fetch(`https://api.github.com/repos/${cfg.repo}/git/blobs/${data.sha}`, {
-        headers: this.githubHeaders(cfg),
-        cache: 'no-store'
-      });
-      if (!blobRes.ok) throw new Error(this.describeGitHubError(blobRes.status));
-      content = (await blobRes.json()).content;
-    }
-    return { text: base64ToUtf8(content || ''), sha: data.sha };
-  }
-
-  githubPutFile(cfg, text, sha) {
-    const url = `https://api.github.com/repos/${cfg.repo}/contents/${REPO_VOCAB_URL}`;
-    const body = {
-      message: `Cập nhật từ vựng (${this.vocabList.length} từ) từ ứng dụng`,
-      content: utf8ToBase64(text),
-      branch: cfg.branch
-    };
-    if (sha) body.sha = sha;
-    return fetch(url, {
-      method: 'PUT',
-      headers: { ...this.githubHeaders(cfg), 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-  }
-
-  scheduleGitHubPush() {
-    if (!this.githubReady || this.isApplyingRemote || !this.getGitHubConfig()) return;
-    clearTimeout(this.githubPushTimer);
-    this.setGitHubStatus('pending');
-    // Gom các thay đổi liên tiếp thành một commit
-    this.githubPushTimer = setTimeout(() => this.syncWithGitHub(), 2000);
-  }
-
-  async syncWithGitHub() {
-    const cfg = this.getGitHubConfig();
-    if (!cfg) return false;
-    if (this.githubSyncing) {
-      this.githubSyncQueued = true;
-      return false;
-    }
-
-    this.githubSyncing = true;
-    this.setGitHubStatus('syncing');
+  getFirebaseConfig() {
     try {
-      // Thử lại khi repo vừa bị thiết bị khác cập nhật (sha không còn khớp)
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const remote = await this.githubGetFile(cfg);
-        const remoteItems = remote.text ? this.parseRemoteVocab(remote.text) : [];
-        if (!remoteItems) throw new Error('vocab.json trên repo bị sai định dạng, hãy sửa file trước.');
+      const raw = localStorage.getItem(STORAGE_FIREBASE_CONFIG);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
 
-        this.applyRemoteMerge(remoteItems);
+    // 1. Kiểm tra cấu hình toàn cục từ file firebase-config.js (window.FIREBASE_CONFIG)
+    if (typeof window !== 'undefined' && window.FIREBASE_CONFIG && (window.FIREBASE_CONFIG.apiKey || window.FIREBASE_CONFIG.databaseURL)) {
+      return window.FIREBASE_CONFIG;
+    }
 
-        const newText = JSON.stringify(this.vocabList, null, 2);
-        if (newText === remote.text) break;
+    // 2. Sử dụng DEFAULT_FIREBASE_CONFIG được khai báo sẵn trong app.js
+    if (DEFAULT_FIREBASE_CONFIG && (DEFAULT_FIREBASE_CONFIG.apiKey || DEFAULT_FIREBASE_CONFIG.databaseURL || DEFAULT_FIREBASE_CONFIG.projectId)) {
+      return DEFAULT_FIREBASE_CONFIG;
+    }
 
-        const res = await this.githubPutFile(cfg, newText, remote.sha);
-        if (res.ok) {
-          this.saveRepoBase(this.vocabList);
-          break;
+    return null;
+  }
+
+  getFirebaseRoom() {
+    const room = localStorage.getItem(STORAGE_FIREBASE_ROOM);
+    if (room && room.trim()) return room.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (typeof window !== 'undefined' && window.FIREBASE_ROOM && window.FIREBASE_ROOM.trim()) {
+      return window.FIREBASE_ROOM.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+    return DEFAULT_FIREBASE_ROOM;
+  }
+
+  checkMagicSyncLink() {
+    try {
+      const hash = window.location.hash;
+      if (!hash || !hash.includes('firebase_sync=')) return false;
+      const match = hash.match(/firebase_sync=([^&]+)/);
+      if (!match) return false;
+      const raw = decodeURIComponent(atob(match[1]));
+      const data = JSON.parse(raw);
+      if (data && data.config) {
+        localStorage.setItem(STORAGE_FIREBASE_CONFIG, JSON.stringify(data.config));
+        if (data.room) {
+          localStorage.setItem(STORAGE_FIREBASE_ROOM, data.room);
         }
-        if ((res.status === 409 || res.status === 422) && attempt < 2) continue;
-        throw new Error(this.describeGitHubError(res.status));
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+        this.showToast('🎉 Đã tự động nhận cấu hình Firebase Realtime từ link chia sẻ!', 'success');
+        return true;
       }
-      this.setGitHubStatus('ok');
-      return true;
     } catch (e) {
-      console.error('Lỗi đồng bộ GitHub:', e);
-      const msg = e instanceof TypeError ? 'Không kết nối được tới GitHub (kiểm tra mạng).' : e.message;
-      this.setGitHubStatus('error', msg);
-      this.showToast(`Chưa lưu được lên GitHub: ${msg}`, 'error');
-      return false;
-    } finally {
-      this.githubSyncing = false;
-      if (this.githubSyncQueued) {
-        this.githubSyncQueued = false;
-        this.scheduleGitHubPush();
+      console.error('Lỗi phân tích Magic Link:', e);
+    }
+    return false;
+  }
+
+  initFirebase() {
+    const cfg = this.getFirebaseConfig();
+    if (!cfg) {
+      this.setFirebaseStatus('off');
+      return;
+    }
+
+    if (typeof firebase === 'undefined') {
+      console.warn('Firebase SDK chưa sẵn sàng.');
+      this.setFirebaseStatus('error', 'Chưa tải được Firebase SDK');
+      return;
+    }
+
+    try {
+      if (!cfg.databaseURL && cfg.projectId) {
+        cfg.databaseURL = `https://${cfg.projectId}-default-rtdb.firebaseio.com`;
       }
+
+      let app;
+      if (firebase.apps && firebase.apps.length > 0) {
+        app = firebase.apps[0];
+      } else {
+        app = firebase.initializeApp(cfg);
+      }
+
+      this.firebaseDb = firebase.database(app);
+      const room = this.getFirebaseRoom();
+      const vocabPath = `chinese_vocab/${room}`;
+
+      if (this.firebaseVocabRef && this._fbListener) {
+        this.firebaseVocabRef.off('value', this._fbListener);
+      }
+
+      this.firebaseVocabRef = this.firebaseDb.ref(vocabPath);
+      this.setFirebaseStatus('connecting');
+
+      // Lắng nghe dữ liệu thay đổi theo thời gian thực (Realtime Listener)
+      this._fbListener = this.firebaseVocabRef.on('value', (snapshot) => {
+        this.setFirebaseStatus('ok');
+        const val = snapshot.val();
+        if (!val) {
+          if (this.vocabList && this.vocabList.length > 0 && !this.hasPushedInitialFirebase) {
+            this.hasPushedInitialFirebase = true;
+            this.pushToFirebase(this.vocabList);
+          }
+          return;
+        }
+
+        this.hasPushedInitialFirebase = true;
+        let remoteItems = null;
+        if (Array.isArray(val)) {
+          remoteItems = val;
+        } else if (val && typeof val === 'object') {
+          if (Array.isArray(val.items)) {
+            remoteItems = val.items;
+          } else {
+            remoteItems = extractVocabArray(val);
+          }
+        }
+
+        if (remoteItems) {
+          const normalized = remoteItems.map((item, idx) => normalizeVocabItem(item, idx)).filter(Boolean);
+          this.applyRemoteMerge(normalized);
+        }
+      }, (error) => {
+        console.error('Lỗi Firebase Realtime:', error);
+        const msg = error.message || 'Lỗi quyền truy cập (kiểm tra Rules: .read & .write)';
+        this.setFirebaseStatus('error', msg);
+      });
+
+      // Theo dõi trạng thái kết nối mạng của Firebase
+      const connectedRef = this.firebaseDb.ref('.info/connected');
+      connectedRef.on('value', (snap) => {
+        if (snap.val() === true) {
+          this.setFirebaseStatus('ok');
+        } else if (this.firebaseStatus === 'ok') {
+          this.setFirebaseStatus('connecting');
+        }
+      });
+
+    } catch (e) {
+      console.error('Lỗi khởi tạo Firebase:', e);
+      this.setFirebaseStatus('error', e.message);
     }
   }
 
-  setGitHubStatus(state, detail = '') {
-    this.githubStatus = state;
-    this.githubStatusDetail = detail;
+  setFirebaseStatus(state, detail = '') {
+    this.firebaseStatus = state;
+    this.firebaseStatusDetail = detail;
     const time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     const states = {
-      off: ['🔗', 'Chưa kết nối GitHub: từ vựng chỉ lưu trên trình duyệt này'],
-      pending: ['⏳', 'Có thay đổi chưa lưu lên GitHub...'],
-      syncing: ['⏳', 'Đang đồng bộ với GitHub...'],
-      ok: ['☁️', `Đã đồng bộ với GitHub lúc ${time}`],
-      error: ['⚠️', `Lỗi đồng bộ GitHub: ${detail}`]
+      off: ['🔥', 'Chưa kết nối Firebase: từ vựng chỉ lưu trên trình duyệt này'],
+      connecting: ['⏳', 'Đang kết nối lại Firebase Realtime...'],
+      pending: ['⏳', 'Đang đồng bộ thay đổi lên Cloud...'],
+      syncing: ['⏳', 'Đang tải dữ liệu từ Cloud...'],
+      ok: ['🔥', `Đang đồng bộ Realtime (Trực tiếp) lúc ${time}`],
+      error: ['⚠️', `Lỗi Firebase: ${detail}`]
     };
     const [icon, text] = states[state] || states.off;
 
-    if (this.btnGitHubSync) {
-      this.btnGitHubSync.textContent = icon;
-      this.btnGitHubSync.setAttribute('title', text);
+    if (this.btnFirebaseSync) {
+      this.btnFirebaseSync.textContent = icon;
+      this.btnFirebaseSync.setAttribute('title', text);
+      if (state === 'ok') {
+        this.btnFirebaseSync.classList.add('is-connected');
+      } else {
+        this.btnFirebaseSync.classList.remove('is-connected');
+      }
     }
-    if (this.githubStatusMsg) {
-      this.githubStatusMsg.textContent = text;
-      this.githubStatusMsg.className = `github-status-msg ${state}`;
+
+    if (this.firebaseStatusMsg) {
+      this.firebaseStatusMsg.textContent = text;
+      this.firebaseStatusMsg.className = `firebase-status-msg ${state}`;
     }
   }
 
-  openGitHubModal() {
-    if (this.isLocked || !this.githubModal) return;
-    const cfg = this.getGitHubConfig();
-    this.githubTokenInput.value = '';
-    this.githubTokenInput.placeholder = cfg ? 'Đã lưu token (nhập token mới để thay)' : 'github_pat_...';
-    this.githubRepoInput.value = localStorage.getItem(STORAGE_GITHUB_REPO) || DEFAULT_GITHUB_REPO;
-    this.githubBranchInput.value = localStorage.getItem(STORAGE_GITHUB_BRANCH) || DEFAULT_GITHUB_BRANCH;
-    if (this.btnGitHubDisconnect) this.btnGitHubDisconnect.style.display = cfg ? 'inline-flex' : 'none';
-    this.setGitHubStatus(this.githubStatus || (cfg ? 'ok' : 'off'), this.githubStatusDetail);
-    this.githubModal.style.display = 'flex';
-    setTimeout(() => this.githubTokenInput.focus(), 50);
+  openFirebaseModal() {
+    if (this.isLocked || !this.firebaseModal) return;
+    const cfg = this.getFirebaseConfig();
+    if (this.firebaseConfigInput) {
+      this.firebaseConfigInput.value = '';
+      this.firebaseConfigInput.placeholder = cfg ? 'Đã lưu cấu hình (dán cấu hình mới để thay thế)' : 'const firebaseConfig = { ... };';
+    }
+    if (this.firebaseRoomInput) {
+      this.firebaseRoomInput.value = localStorage.getItem(STORAGE_FIREBASE_ROOM) || DEFAULT_FIREBASE_ROOM;
+    }
+    if (this.btnFirebaseDisconnect) {
+      this.btnFirebaseDisconnect.style.display = cfg ? 'inline-flex' : 'none';
+    }
+    if (this.firebaseConnectedTools) {
+      this.firebaseConnectedTools.style.display = cfg ? 'block' : 'none';
+    }
+    this.setFirebaseStatus(this.firebaseStatus || (cfg ? 'ok' : 'off'), this.firebaseStatusDetail);
+    this.firebaseModal.style.display = 'flex';
+    setTimeout(() => {
+      if (this.firebaseConfigInput) this.firebaseConfigInput.focus();
+    }, 50);
   }
 
-  closeGitHubModal() {
-    if (this.githubModal) this.githubModal.style.display = 'none';
+  closeFirebaseModal() {
+    if (this.firebaseModal) this.firebaseModal.style.display = 'none';
   }
 
-  async handleGitHubConnectSubmit() {
-    const token = this.githubTokenInput.value.trim() || localStorage.getItem(STORAGE_GITHUB_TOKEN) || '';
-    const repo = this.githubRepoInput.value.trim()
-      .replace(/^https?:\/\/github\.com\//, '')
-      .replace(/\.git$/, '')
-      .replace(/\/+$/, '');
-    const branch = this.githubBranchInput.value.trim() || DEFAULT_GITHUB_BRANCH;
+  handleFirebaseSubmit() {
+    const rawInput = this.firebaseConfigInput ? this.firebaseConfigInput.value.trim() : '';
+    let parsedConfig = null;
 
-    if (!token) {
-      this.setGitHubStatus('error', 'Vui lòng nhập token.');
-      return;
-    }
-    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
-      this.setGitHubStatus('error', 'Tên repo phải có dạng tên-user/tên-repo.');
-      return;
-    }
-
-    // Kiểm tra token và repo trước khi lưu
-    this.setGitHubStatus('syncing');
-    try {
-      const res = await fetch(`https://api.github.com/repos/${repo}`, {
-        headers: this.githubHeaders({ token }),
-        cache: 'no-store'
-      });
-      if (!res.ok) {
-        this.setGitHubStatus('error', this.describeGitHubError(res.status));
+    if (rawInput) {
+      parsedConfig = parseFirebaseConfig(rawInput);
+      if (!parsedConfig) {
+        this.setFirebaseStatus('error', 'Cấu hình không hợp lệ. Vui lòng dán JSON hoặc đoạn mã JS chứa apiKey / databaseURL / projectId.');
         return;
       }
-    } catch (e) {
-      this.setGitHubStatus('error', 'Không kết nối được tới GitHub (kiểm tra mạng).');
-      return;
+    } else {
+      parsedConfig = this.getFirebaseConfig();
+      if (!parsedConfig) {
+        this.setFirebaseStatus('error', 'Vui lòng dán cấu hình Firebase.');
+        return;
+      }
     }
 
-    localStorage.setItem(STORAGE_GITHUB_TOKEN, token);
-    localStorage.setItem(STORAGE_GITHUB_REPO, repo);
-    localStorage.setItem(STORAGE_GITHUB_BRANCH, branch);
-    this.githubTokenInput.value = '';
-    if (this.btnGitHubDisconnect) this.btnGitHubDisconnect.style.display = 'inline-flex';
+    const room = this.firebaseRoomInput ? (this.firebaseRoomInput.value.trim() || DEFAULT_FIREBASE_ROOM) : DEFAULT_FIREBASE_ROOM;
 
-    if (await this.syncWithGitHub()) {
-      this.showToast('Đã kết nối GitHub! Từ vựng sẽ tự lưu vào vocab.json trong repo.', 'success');
+    localStorage.setItem(STORAGE_FIREBASE_CONFIG, JSON.stringify(parsedConfig));
+    localStorage.setItem(STORAGE_FIREBASE_ROOM, room);
+
+    if (this.firebaseConfigInput) this.firebaseConfigInput.value = '';
+    if (this.btnFirebaseDisconnect) this.btnFirebaseDisconnect.style.display = 'inline-flex';
+    if (this.firebaseConnectedTools) this.firebaseConnectedTools.style.display = 'block';
+
+    this.initFirebase();
+    this.showToast('Đã lưu cấu hình và kích hoạt đồng bộ Firebase Realtime!', 'success');
+  }
+
+  handleFirebaseDisconnect() {
+    if (this.firebaseVocabRef && this._fbListener) {
+      this.firebaseVocabRef.off('value', this._fbListener);
+      this._fbListener = null;
+    }
+    clearTimeout(this.firebasePushTimer);
+    localStorage.removeItem(STORAGE_FIREBASE_CONFIG);
+    localStorage.removeItem(STORAGE_FIREBASE_ROOM);
+    this.firebaseDb = null;
+    this.firebaseVocabRef = null;
+
+    if (this.btnFirebaseDisconnect) this.btnFirebaseDisconnect.style.display = 'none';
+    if (this.firebaseConnectedTools) this.firebaseConnectedTools.style.display = 'none';
+    this.setFirebaseStatus('off');
+    this.showToast('Đã ngắt kết nối Firebase Realtime.', 'info');
+  }
+
+  copyFirebaseShareLink() {
+    const cfg = this.getFirebaseConfig();
+    if (!cfg) {
+      this.showToast('Vui lòng kết nối Firebase trước khi tạo link!', 'warning');
+      return;
+    }
+    const room = this.getFirebaseRoom();
+    const payload = { config: cfg, room: room };
+    const encoded = btoa(encodeURIComponent(JSON.stringify(payload)));
+    const shareUrl = `${window.location.origin}${window.location.pathname}#firebase_sync=${encoded}`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        this.showToast('✅ Đã sao chép link! Mở link này trên điện thoại để đồng bộ ngay.', 'success');
+      }).catch(() => {
+        prompt('Sao chép liên kết sau và mở trên điện thoại/máy khác:', shareUrl);
+      });
+    } else {
+      prompt('Sao chép liên kết sau và mở trên điện thoại/máy khác:', shareUrl);
     }
   }
 
-  disconnectGitHub() {
-    clearTimeout(this.githubPushTimer);
-    localStorage.removeItem(STORAGE_GITHUB_TOKEN);
-    // Bỏ base vì GitHub Pages có thể chậm hơn bản đã ghi qua API
-    localStorage.removeItem(STORAGE_REPO_BASE);
-    if (this.btnGitHubDisconnect) this.btnGitHubDisconnect.style.display = 'none';
-    this.setGitHubStatus('off');
-    this.showToast('Đã ngắt kết nối GitHub và xóa token khỏi trình duyệt này.', 'info');
+  scheduleFirebasePush() {
+    if (!this.firebaseVocabRef || this.isApplyingRemote || !this.getFirebaseConfig()) return;
+    clearTimeout(this.firebasePushTimer);
+    this.setFirebaseStatus('pending');
+    this.firebasePushTimer = setTimeout(() => {
+      this.pushToFirebase(this.vocabList);
+    }, 400);
+  }
+
+  async pushToFirebase(items) {
+    if (!this.firebaseVocabRef || this.isApplyingRemote) return;
+    try {
+      this.setFirebaseStatus('pending');
+      await this.firebaseVocabRef.set({
+        items: items,
+        updatedAt: Date.now()
+      });
+      this.saveRepoBase(items);
+      this.setFirebaseStatus('ok');
+    } catch (err) {
+      console.error('Lỗi ghi dữ liệu lên Firebase:', err);
+      const msg = err.message || 'Không thể lưu lên Cloud';
+      this.setFirebaseStatus('error', msg);
+      this.showToast(`Chưa lưu được lên Firebase: ${msg}`, 'error');
+    }
   }
 
   // ==========================================
@@ -1969,8 +2098,7 @@ class VocabApp {
     downloadAnchor.setAttribute("download", filename);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
-    downloadAnchor.remove();
-    this.showToast('Đã xuất vocab.json! Chép file vào thư mục repo rồi commit & push để đồng bộ.', 'success');
+    this.showToast('Đã xuất file vocab.json thành công!', 'success');
   }
 
   importVocabJson(e) {

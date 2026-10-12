@@ -26,9 +26,6 @@
           <span>📚</span>
           <span id="stat-total-count">0 từ</span>
         </div>
-        <button class="icon-btn" id="btn-github-sync" aria-label="Đồng bộ với GitHub" title="Kết nối GitHub">
-          🔗
-        </button>
         <button class="icon-btn" id="btn-lock-app" aria-label="Khóa ứng dụng ngay" title="Khóa ứng dụng ngay">
           🔒
         </button>
@@ -326,7 +323,7 @@
             <input type="text" id="bank-search-input" placeholder="Tìm theo Hán tự, Pinyin, Hán-Việt hoặc nghĩa...">
           </div>
           <div class="bank-actions">
-            <button class="btn-secondary" id="btn-export-json" title="Xuất vocab.json để chép vào repo (đồng bộ lên GitHub)">
+            <button class="btn-secondary" id="btn-export-json" title="Xuất dữ liệu vocab.json để sao lưu (Backup)">
               <span>📤</span> Xuất JSON
             </button>
             <button class="btn-secondary" id="btn-import-json" title="Nhập dữ liệu từ file JSON">
@@ -599,48 +596,12 @@
     </div>
   </div>
 
-  <!-- Modal: GitHub Sync -->
-  <div class="modal-backdrop" id="github-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="github-modal-title">
-    <div class="modal-dialog">
-      <div class="modal-dialog-header">
-        <span class="modal-dialog-icon">☁️</span>
-        <h3 class="modal-dialog-title" id="github-modal-title" style="color: #60a5fa;">Đồng Bộ Với GitHub</h3>
-      </div>
-      <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 0.75rem;">
-        Kết nối để mỗi lần thêm / sửa / xóa từ, ứng dụng tự lưu vào <code>vocab.json</code> trong repo.
-        Tạo token tại <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>:
-        chọn <strong>Only select repositories</strong> &rarr; repo của bạn, mục <strong>Contents: Read and write</strong>.
-      </p>
-      <form id="github-form" class="vocab-form" autocomplete="off">
-        <div class="form-group">
-          <label for="github-token-input" class="form-label">Fine-grained Personal Access Token</label>
-          <input type="password" id="github-token-input" class="form-input" placeholder="github_pat_...">
-        </div>
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label for="github-repo-input" class="form-label">Repo</label>
-            <input type="text" id="github-repo-input" class="form-input" placeholder="tên-user/tên-repo">
-          </div>
-          <div class="form-group">
-            <label for="github-branch-input" class="form-label">Nhánh</label>
-            <input type="text" id="github-branch-input" class="form-input" placeholder="main">
-          </div>
-        </div>
-        <p class="github-status-msg off" id="github-status-msg"></p>
-        <p style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
-          🔒 Token chỉ lưu trên trình duyệt này. Chỉ kết nối trên thiết bị của riêng bạn.
-        </p>
-        <div class="modal-dialog-actions" style="margin-top: 1rem;">
-          <button type="button" class="btn-secondary btn-danger" id="btn-github-disconnect" style="display: none; margin-right: auto;">Ngắt kết nối</button>
-          <button type="button" class="btn-secondary" id="btn-close-github">Đóng</button>
-          <button type="submit" class="reveal-btn" style="width: auto; padding: 0.75rem 1.4rem;">
-            <span>🔗</span> Lưu &amp; Đồng bộ
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
 
+
+  <!-- Firebase Realtime Database SDK (Compat for Vanilla JS) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
   <script src="pinyin.js"></script>
   <script src="app.js"></script>
 </body>
