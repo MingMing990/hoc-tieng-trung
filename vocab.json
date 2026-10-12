@@ -1,0 +1,90 @@
+[
+  {
+    "id": "vocab-1791812412262",
+    "hanzi": "食堂",
+    "pinyin": "shí táng",
+    "hanviet": "THỰC ĐƯỜNG",
+    "meaningVn": "Nhà ăn",
+    "meaningEn": "Dining hall",
+    "exampleCn": "",
+    "exampleVn": "",
+    "createdAt": 1791812412262
+  },
+  {
+    "id": "vocab-1",
+    "hanzi": "学习",
+    "pinyin": "xué xí",
+    "hanviet": "HỌC TẬP",
+    "meaningVn": "Học tập, nghiên cứu kiến thức",
+    "meaningEn": "To study, to learn",
+    "exampleCn": "我们每天都在认真学习汉语。",
+    "exampleVn": "Chúng tôi mỗi ngày đều chăm chỉ học tiếng Trung.",
+    "createdAt": 1791661810735
+  },
+  {
+    "id": "vocab-2",
+    "hanzi": "你好",
+    "pinyin": "nǐ hǎo",
+    "hanviet": "NHĨ HẢO",
+    "meaningVn": "Xin chào",
+    "meaningEn": "Hello, greetings",
+    "exampleCn": "你好，很高兴认识你！",
+    "exampleVn": "Xin chào, rất vui được làm quen với bạn!",
+    "createdAt": 1791661910735
+  },
+  {
+    "id": "vocab-3",
+    "hanzi": "谢谢",
+    "pinyin": "xiè xie",
+    "hanviet": "TẠ TẠ",
+    "meaningVn": "Cảm ơn",
+    "meaningEn": "Thank you, thanks",
+    "exampleCn": "非常感谢你的热心帮助。",
+    "exampleVn": "Vô cùng cảm ơn sự giúp đỡ nhiệt tình của bạn.",
+    "createdAt": 1791662010735
+  },
+  {
+    "id": "vocab-4",
+    "hanzi": "朋友",
+    "pinyin": "péng you",
+    "hanviet": "BẰNG HỮU",
+    "meaningVn": "Bạn bè, người bạn",
+    "meaningEn": "Friend",
+    "exampleCn": "海内存知己，天涯若比邻。",
+    "exampleVn": "Trong bốn biển có bạn tri kỷ, thì chân trời cũng như cạnh nhà.",
+    "createdAt": 1791662110735
+  },
+  {
+    "id": "vocab-5",
+    "hanzi": "老师",
+    "pinyin": "lǎoshi",
+    "hanviet": "LÃO SƯ",
+    "meaningVn": "Thầy cô, giáo viên",
+    "meaningEn": "Teacher",
+    "exampleCn": "王老师教我们汉语发音。",
+    "exampleVn": "Thầy Vương dạy chúng tôi phát âm tiếng Trung.",
+    "createdAt": 1791662210735
+  },
+  {
+    "id": "vocab-6",
+    "hanzi": "喜欢",
+    "pinyin": "xǐ huan",
+    "hanviet": "HỶ HOAN",
+    "meaningVn": "Thích, yêu thích",
+    "meaningEn": "To like, to be fond of",
+    "exampleCn": "我非常喜欢中国书法与茶文化。",
+    "exampleVn": "Tôi rất thích thư pháp và văn hóa trà Trung Hoa.",
+    "createdAt": 1791662260735
+  },
+  {
+    "id": "vocab-7",
+    "hanzi": "明天",
+    "pinyin": "míng tiān",
+    "hanviet": "MINH THIÊN",
+    "meaningVn": "Ngày mai",
+    "meaningEn": "Tomorrow",
+    "exampleCn": "明天早上我们在学校见。",
+    "exampleVn": "Sáng mai chúng ta gặp nhau ở trường nhé.",
+    "createdAt": 1791662300735
+  }
+]
