@@ -79,3 +79,18 @@ Nhấp đúp chuột vào file [`index.html`](file:///e:/WORK/Projects/VibeCode/
 ### Cách 2: Mở qua Local Server (đang chạy)
 Ứng dụng đang được phục vụ tại:
 👉 **http://localhost:8080/ChineseVocab/**
+
+---
+
+## 🔄 Đồng Bộ Từ Vựng Qua Repo (`vocab.json`)
+
+Từ vựng được lưu trong `localStorage` của **từng trình duyệt, từng địa chỉ trang** (GitHub Pages, localhost, file://), nên `git push`/`git pull` không tự mang từ vựng theo. Để đồng bộ:
+
+1. Ở nơi có từ mới nhất, vào **Kho từ vựng → 📤 Xuất JSON** (file tải về tên là `vocab.json`).
+2. Chép `vocab.json` vào thư mục gốc của repo (cùng chỗ với `index.html`), ghi đè file cũ.
+3. `git add vocab.json && git commit -m "Cap nhat tu vung" && git push` (và `git pull` ở máy khác).
+4. Khi mở app, `vocab.json` được tự động **gộp** vào kho trên máy:
+   - Từ chưa có thì được thêm vào; từ đã có thì giữ bản được sửa sau cùng.
+   - Mỗi phiên bản `vocab.json` chỉ được gộp **một lần**, nên từ bạn xóa trên máy sẽ không bị nạp lại (muốn xóa hẳn thì xuất lại và commit `vocab.json`).
+
+> Lưu ý: Tính năng này cần mở app qua web (GitHub Pages hoặc localhost), không hoạt động khi mở trực tiếp file `index.html`. GitHub Pages có thể mất vài phút để cập nhật sau khi push. `vocab.json` nằm công khai trong repo.

@@ -7,6 +7,10 @@ const STORAGE_AUTH_HASH = 'chinese_vocab_auth_hash';
 const STORAGE_REMEMBER_AUTH = 'chinese_vocab_remember_auth';
 const SESSION_AUTH = 'chinese_vocab_session_auth';
 
+// Repo Vocabulary Sync (vocab.json nằm cùng thư mục với index.html trong repo)
+const REPO_VOCAB_URL = 'vocab.json';
+const STORAGE_REPO_SYNC_SIG = 'chinese_vocab_repo_sync_sig';
+
 // Pre-configured Master Password Hash (SHA-256 with salt)
 const DEFAULT_MASTER_PASSWORD_HASH = 'c0ff5cca5f88fc1f987410a2c8374afb5215bb4fc2f9b3ef5939b67fcf7bb6e1';
 
@@ -71,8 +75,27 @@ function normalizeVocabItem(item, index = 0) {
     meaningEn: capitalizeFirstLetter(meaningEn) || '-',
     exampleCn: exampleCn || '',
     exampleVn: capitalizeFirstLetter(exampleVn) || '',
-    createdAt: item.createdAt || Date.now()
+    createdAt: item.createdAt || Date.now(),
+    ...(item.updatedAt ? { updatedAt: item.updatedAt } : {})
   };
+}
+
+/**
+ * Lấy mảng từ vựng từ dữ liệu JSON: chấp nhận mảng trực tiếp
+ * hoặc object bọc ngoài (words, vocabulary, vocabList, vocab, data, items)
+ */
+function extractVocabArray(rawData) {
+  if (Array.isArray(rawData)) return rawData;
+  if (rawData && typeof rawData === 'object') {
+    const candidate = rawData.words || rawData.vocabulary || rawData.vocabList || rawData.vocab || rawData.data || rawData.items;
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return null;
+}
+
+async function sha256Hex(text) {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // Default Seed Vocabulary (Hanviet in UPPERCASE, Pinyin in lowercase, Meanings capitalized)
@@ -179,6 +202,7 @@ class VocabApp {
     this.renderVocabBank();
     this.initReviewSession();
     this.checkAuthStatus();
+    this.syncFromRepo();
   }
 
   // Load from local storage or fallback to defaults
@@ -1513,18 +1537,106 @@ class VocabApp {
   }
 
   // ==========================================
+  // REPO SYNC (vocab.json)
+  // ==========================================
+  async syncFromRepo() {
+    // fetch không hoạt động khi mở trực tiếp file index.html (file://)
+    if (location.protocol === 'file:') return;
+
+    let text;
+    try {
+      const res = await fetch(REPO_VOCAB_URL, { cache: 'no-cache' });
+      if (!res.ok) return; // Repo chưa có vocab.json
+      text = await res.text();
+    } catch (e) {
+      console.warn('Không tải được vocab.json:', e);
+      return;
+    }
+
+    // Mỗi phiên bản vocab.json chỉ gộp một lần, để từ đã xóa trên máy không bị nạp lại
+    const sig = await sha256Hex(text);
+    if (localStorage.getItem(STORAGE_REPO_SYNC_SIG) === sig) return;
+
+    let repoList;
+    try {
+      repoList = extractVocabArray(JSON.parse(text));
+    } catch (e) {
+      console.error('vocab.json sai định dạng JSON:', e);
+      return;
+    }
+    if (!repoList) {
+      console.error('vocab.json không chứa danh sách từ vựng.');
+      return;
+    }
+
+    const repoItems = repoList.map((item, idx) => normalizeVocabItem(item, idx)).filter(Boolean);
+    const merged = [...this.vocabList];
+    const indexByHanzi = new Map(merged.map((item, i) => [item.hanzi, i]));
+    const usedIds = new Set(merged.map(item => item.id));
+    const timeOf = (item) => item.updatedAt || item.createdAt || 0;
+    const added = [];
+    const updated = [];
+
+    repoItems.forEach((item, i) => {
+      const localIdx = indexByHanzi.get(item.hanzi);
+      if (localIdx === undefined) {
+        // Từ mới: đổi id nếu trùng id của một từ khác trên máy
+        const newItem = usedIds.has(item.id) ? { ...item, id: `vocab-${Date.now()}-${i}` } : item;
+        usedIds.add(newItem.id);
+        indexByHanzi.set(newItem.hanzi, merged.length);
+        merged.push(newItem);
+        added.push(newItem);
+      } else if (timeOf(item) > timeOf(merged[localIdx])) {
+        // Cùng một từ: giữ bản được sửa sau cùng, bảo toàn id và ngày tạo trên máy
+        const existing = merged[localIdx];
+        const newItem = { ...item, id: existing.id, createdAt: existing.createdAt };
+        merged[localIdx] = newItem;
+        updated.push(newItem);
+      }
+    });
+
+    localStorage.setItem(STORAGE_REPO_SYNC_SIG, sig);
+    if (added.length === 0 && updated.length === 0) return;
+
+    this.saveVocabList(merged);
+    this.renderVocabBank();
+    this.applyChangesToReviewDeck(added, updated);
+    this.showToast(`Đã đồng bộ từ vocab.json: thêm ${added.length} từ, cập nhật ${updated.length} từ.`, 'success');
+  }
+
+  // Cập nhật vòng ôn tập đang chạy mà không làm mất tiến độ
+  applyChangesToReviewDeck(added, updated) {
+    const sessionActive = this.reviewDeck.length > 0 && this.reviewIndex < this.reviewDeck.length;
+    if (!sessionActive) {
+      this.initReviewSession();
+      return;
+    }
+
+    updated.forEach(item => {
+      const deckIdx = this.reviewDeck.findIndex(x => x.id === item.id);
+      if (deckIdx !== -1) this.reviewDeck[deckIdx] = item;
+    });
+    this.reviewDeck.push(...added);
+
+    const wasRevealed = this.isCardRevealed;
+    this.renderCurrentReviewWord();
+    if (wasRevealed) this.revealReviewCard();
+  }
+
+  // ==========================================
   // EXPORT / IMPORT JSON
   // ==========================================
   exportVocabJson() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.vocabList, null, 2));
     const downloadAnchor = document.createElement('a');
-    const filename = `chinese_vocabulary_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    // Đặt tên vocab.json để chép thẳng vào repo rồi commit (đồng bộ lên GitHub Pages)
+    const filename = REPO_VOCAB_URL;
     downloadAnchor.setAttribute("href", dataStr);
     downloadAnchor.setAttribute("download", filename);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
-    this.showToast('Đã xuất file dữ liệu từ vựng thành công!', 'success');
+    this.showToast('Đã xuất vocab.json! Chép file vào thư mục repo rồi commit & push để đồng bộ.', 'success');
   }
 
   importVocabJson(e) {
@@ -1535,17 +1647,7 @@ class VocabApp {
     reader.onload = (event) => {
       try {
         const rawData = JSON.parse(event.target.result);
-        let listToImport = null;
-
-        if (Array.isArray(rawData)) {
-          listToImport = rawData;
-        } else if (rawData && typeof rawData === 'object') {
-          // Check common wrapper keys: words, vocabulary, vocabList, vocab, data, items
-          const candidate = rawData.words || rawData.vocabulary || rawData.vocabList || rawData.vocab || rawData.data || rawData.items;
-          if (Array.isArray(candidate)) {
-            listToImport = candidate;
-          }
-        }
+        const listToImport = extractVocabArray(rawData);
 
         if (Array.isArray(listToImport) && listToImport.length > 0) {
           const sanitized = listToImport
