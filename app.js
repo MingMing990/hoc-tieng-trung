@@ -9,7 +9,15 @@ const SESSION_AUTH = 'chinese_vocab_session_auth';
 
 // Repo Vocabulary Sync (vocab.json nằm cùng thư mục với index.html trong repo)
 const REPO_VOCAB_URL = 'vocab.json';
-const STORAGE_REPO_SYNC_SIG = 'chinese_vocab_repo_sync_sig';
+// Danh sách Hán tự của vocab.json ở lần đồng bộ trước, dùng để nhận biết từ đã bị xóa
+const STORAGE_REPO_BASE = 'chinese_vocab_repo_base';
+
+// GitHub Sync: tự commit vocab.json qua GitHub API (token chỉ lưu trên trình duyệt)
+const DEFAULT_GITHUB_REPO = 'MingMing990/chinese-vocab';
+const DEFAULT_GITHUB_BRANCH = 'main';
+const STORAGE_GITHUB_TOKEN = 'chinese_vocab_github_token';
+const STORAGE_GITHUB_REPO = 'chinese_vocab_github_repo';
+const STORAGE_GITHUB_BRANCH = 'chinese_vocab_github_branch';
 
 // Pre-configured Master Password Hash (SHA-256 with salt)
 const DEFAULT_MASTER_PASSWORD_HASH = 'c0ff5cca5f88fc1f987410a2c8374afb5215bb4fc2f9b3ef5939b67fcf7bb6e1';
@@ -93,9 +101,19 @@ function extractVocabArray(rawData) {
   return null;
 }
 
-async function sha256Hex(text) {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+// Base64 <-> UTF-8 (GitHub API trả và nhận nội dung file dạng base64)
+function utf8ToBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function base64ToUtf8(b64) {
+  const binary = atob(b64.replace(/\s/g, ''));
+  return new TextDecoder().decode(Uint8Array.from(binary, c => c.charCodeAt(0)));
 }
 
 // Default Seed Vocabulary (Hanviet in UPPERCASE, Pinyin in lowercase, Meanings capitalized)
@@ -202,6 +220,8 @@ class VocabApp {
     this.renderVocabBank();
     this.initReviewSession();
     this.checkAuthStatus();
+    this.setGitHubStatus(this.getGitHubConfig() ? 'syncing' : 'off');
+    this.githubReady = true;
     this.syncFromRepo();
   }
 
@@ -228,6 +248,7 @@ class VocabApp {
     this.vocabList = list;
     localStorage.setItem('chinese_vocab_list', JSON.stringify(list));
     this.updateStats();
+    this.scheduleGitHubPush();
   }
 
   initDOM() {
@@ -363,6 +384,17 @@ class VocabApp {
     this.btnCloseQuickEdit = document.getElementById('btn-close-quick-edit');
     this.btnCancelQuickEdit = document.getElementById('btn-cancel-quick-edit');
     this.quickEditVocabId = null;
+
+    // GitHub Sync Elements
+    this.btnGitHubSync = document.getElementById('btn-github-sync');
+    this.githubModal = document.getElementById('github-modal');
+    this.githubForm = document.getElementById('github-form');
+    this.githubTokenInput = document.getElementById('github-token-input');
+    this.githubRepoInput = document.getElementById('github-repo-input');
+    this.githubBranchInput = document.getElementById('github-branch-input');
+    this.githubStatusMsg = document.getElementById('github-status-msg');
+    this.btnGitHubDisconnect = document.getElementById('btn-github-disconnect');
+    this.btnCloseGitHub = document.getElementById('btn-close-github');
   }
 
   initTheme() {
@@ -530,6 +562,7 @@ class VocabApp {
 
       // If Quick Edit Modal is active, block review shortcuts
       if (this.quickEditModal && this.quickEditModal.style.display === 'flex') return;
+      if (this.githubModal && this.githubModal.style.display === 'flex') return;
 
       const activeTab = document.querySelector('.tab-content.active');
       if (!activeTab || activeTab.id !== 'tab-review') return;
@@ -671,6 +704,28 @@ class VocabApp {
       this.changePwForm.addEventListener('submit', (e) => {
         e.preventDefault();
         this.handleChangePasswordSubmit();
+      });
+    }
+
+    // GitHub Sync
+    if (this.btnGitHubSync) {
+      this.btnGitHubSync.addEventListener('click', () => this.openGitHubModal());
+    }
+    if (this.githubForm) {
+      this.githubForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleGitHubConnectSubmit();
+      });
+    }
+    if (this.btnGitHubDisconnect) {
+      this.btnGitHubDisconnect.addEventListener('click', () => this.disconnectGitHub());
+    }
+    if (this.btnCloseGitHub) {
+      this.btnCloseGitHub.addEventListener('click', () => this.closeGitHubModal());
+    }
+    if (this.githubModal) {
+      this.githubModal.addEventListener('click', (e) => {
+        if (e.target === this.githubModal) this.closeGitHubModal();
       });
     }
 
@@ -1538,8 +1593,14 @@ class VocabApp {
 
   // ==========================================
   // REPO SYNC (vocab.json)
+  // - Chưa kết nối GitHub: chỉ đọc vocab.json từ GitHub Pages (một chiều)
+  // - Đã kết nối GitHub (có token): đọc/ghi vocab.json qua GitHub API, tự commit
   // ==========================================
   async syncFromRepo() {
+    if (this.getGitHubConfig()) {
+      await this.syncWithGitHub();
+      return;
+    }
     // fetch không hoạt động khi mở trực tiếp file index.html (file://)
     if (location.protocol === 'file:') return;
 
@@ -1553,63 +1614,122 @@ class VocabApp {
       return;
     }
 
-    // Mỗi phiên bản vocab.json chỉ gộp một lần, để từ đã xóa trên máy không bị nạp lại
-    const sig = await sha256Hex(text);
-    if (localStorage.getItem(STORAGE_REPO_SYNC_SIG) === sig) return;
+    const remoteItems = this.parseRemoteVocab(text);
+    if (remoteItems) this.applyRemoteMerge(remoteItems);
+  }
 
-    let repoList;
+  parseRemoteVocab(text) {
+    let list;
     try {
-      repoList = extractVocabArray(JSON.parse(text));
+      list = extractVocabArray(JSON.parse(text));
     } catch (e) {
       console.error('vocab.json sai định dạng JSON:', e);
-      return;
+      return null;
     }
-    if (!repoList) {
+    if (!list) {
       console.error('vocab.json không chứa danh sách từ vựng.');
-      return;
+      return null;
+    }
+    return list.map((item, idx) => normalizeVocabItem(item, idx)).filter(Boolean);
+  }
+
+  /**
+   * Gộp ba chiều giữa kho trên máy, vocab.json trên repo và danh sách Hán tự
+   * ở lần đồng bộ trước (base), để phân biệt "từ mới thêm" với "từ đã bị xóa":
+   * - Từ có ở cả hai nơi: giữ bản được sửa sau cùng
+   * - Từ chỉ có trên repo: thêm vào máy, trừ khi base có nó (tức là máy này đã xóa)
+   * - Từ chỉ có trên máy: giữ lại, trừ khi base có nó (tức là nơi khác đã xóa)
+   */
+  mergeWithRemote(remoteItems) {
+    let base = null;
+    try {
+      const baseRaw = localStorage.getItem(STORAGE_REPO_BASE);
+      if (baseRaw) base = new Set(JSON.parse(baseRaw));
+    } catch (e) {
+      base = null;
     }
 
-    const repoItems = repoList.map((item, idx) => normalizeVocabItem(item, idx)).filter(Boolean);
-    const merged = [...this.vocabList];
-    const indexByHanzi = new Map(merged.map((item, i) => [item.hanzi, i]));
-    const usedIds = new Set(merged.map(item => item.id));
     const timeOf = (item) => item.updatedAt || item.createdAt || 0;
+    const remoteByHanzi = new Map(remoteItems.map(item => [item.hanzi, item]));
+    const seenHanzi = new Set();
+    const usedIds = new Set();
+    const merged = [];
     const added = [];
     const updated = [];
+    const removed = [];
 
-    repoItems.forEach((item, i) => {
-      const localIdx = indexByHanzi.get(item.hanzi);
-      if (localIdx === undefined) {
-        // Từ mới: đổi id nếu trùng id của một từ khác trên máy
-        const newItem = usedIds.has(item.id) ? { ...item, id: `vocab-${Date.now()}-${i}` } : item;
-        usedIds.add(newItem.id);
-        indexByHanzi.set(newItem.hanzi, merged.length);
-        merged.push(newItem);
-        added.push(newItem);
-      } else if (timeOf(item) > timeOf(merged[localIdx])) {
-        // Cùng một từ: giữ bản được sửa sau cùng, bảo toàn id và ngày tạo trên máy
-        const existing = merged[localIdx];
-        const newItem = { ...item, id: existing.id, createdAt: existing.createdAt };
-        merged[localIdx] = newItem;
-        updated.push(newItem);
+    this.vocabList.forEach(local => {
+      seenHanzi.add(local.hanzi);
+      const remote = remoteByHanzi.get(local.hanzi);
+      if (!remote) {
+        if (base && base.has(local.hanzi)) {
+          removed.push(local);
+          return;
+        }
+        merged.push(local);
+      } else if (timeOf(remote) > timeOf(local)) {
+        const item = { ...remote, id: local.id, createdAt: local.createdAt };
+        merged.push(item);
+        updated.push(item);
+      } else {
+        merged.push(local);
       }
+      usedIds.add(local.id);
     });
 
-    localStorage.setItem(STORAGE_REPO_SYNC_SIG, sig);
-    if (added.length === 0 && updated.length === 0) return;
+    remoteItems.forEach((remote, i) => {
+      if (seenHanzi.has(remote.hanzi)) return;
+      seenHanzi.add(remote.hanzi);
+      if (base && base.has(remote.hanzi)) return;
+      // Đổi id nếu trùng id của một từ khác trên máy
+      const item = usedIds.has(remote.id) ? { ...remote, id: `vocab-${Date.now()}-${i}` } : remote;
+      usedIds.add(item.id);
+      merged.push(item);
+      added.push(item);
+    });
 
+    return { merged, added, updated, removed };
+  }
+
+  applyRemoteMerge(remoteItems) {
+    const { merged, added, updated, removed } = this.mergeWithRemote(remoteItems);
+    this.saveRepoBase(remoteItems);
+
+    if (added.length === 0 && updated.length === 0 && removed.length === 0) return;
+
+    this.isApplyingRemote = true;
     this.saveVocabList(merged);
+    this.isApplyingRemote = false;
     this.renderVocabBank();
-    this.applyChangesToReviewDeck(added, updated);
-    this.showToast(`Đã đồng bộ từ vocab.json: thêm ${added.length} từ, cập nhật ${updated.length} từ.`, 'success');
+    this.applyChangesToReviewDeck(added, updated, removed);
+
+    const parts = [];
+    if (added.length) parts.push(`thêm ${added.length}`);
+    if (updated.length) parts.push(`cập nhật ${updated.length}`);
+    if (removed.length) parts.push(`xóa ${removed.length}`);
+    this.showToast(`Đã đồng bộ từ vocab.json: ${parts.join(', ')} từ.`, 'success');
+  }
+
+  saveRepoBase(items) {
+    localStorage.setItem(STORAGE_REPO_BASE, JSON.stringify(items.map(item => item.hanzi)));
   }
 
   // Cập nhật vòng ôn tập đang chạy mà không làm mất tiến độ
-  applyChangesToReviewDeck(added, updated) {
+  applyChangesToReviewDeck(added, updated, removed = []) {
     const sessionActive = this.reviewDeck.length > 0 && this.reviewIndex < this.reviewDeck.length;
     if (!sessionActive) {
       this.initReviewSession();
       return;
+    }
+
+    let wasRevealed = this.isCardRevealed;
+    if (removed.length > 0) {
+      const removedIds = new Set(removed.map(item => item.id));
+      const current = this.reviewDeck[this.reviewIndex];
+      const removedBefore = this.reviewDeck.slice(0, this.reviewIndex).filter(x => removedIds.has(x.id)).length;
+      this.reviewDeck = this.reviewDeck.filter(x => !removedIds.has(x.id));
+      this.reviewIndex -= removedBefore;
+      if (current && removedIds.has(current.id)) wasRevealed = false;
     }
 
     updated.forEach(item => {
@@ -1618,9 +1738,223 @@ class VocabApp {
     });
     this.reviewDeck.push(...added);
 
-    const wasRevealed = this.isCardRevealed;
+    if (this.reviewDeck.length === 0) {
+      this.initReviewSession();
+      return;
+    }
     this.renderCurrentReviewWord();
     if (wasRevealed) this.revealReviewCard();
+  }
+
+  // ==========================================
+  // GITHUB SYNC (tự commit vocab.json qua GitHub API)
+  // ==========================================
+  getGitHubConfig() {
+    const token = localStorage.getItem(STORAGE_GITHUB_TOKEN);
+    if (!token) return null;
+    return {
+      token,
+      repo: localStorage.getItem(STORAGE_GITHUB_REPO) || DEFAULT_GITHUB_REPO,
+      branch: localStorage.getItem(STORAGE_GITHUB_BRANCH) || DEFAULT_GITHUB_BRANCH
+    };
+  }
+
+  githubHeaders(cfg) {
+    return {
+      'Authorization': `Bearer ${cfg.token}`,
+      'Accept': 'application/vnd.github+json'
+    };
+  }
+
+  describeGitHubError(status) {
+    if (status === 401) return 'Token không hợp lệ hoặc đã hết hạn.';
+    if (status === 403) return 'Token không có quyền ghi (cần Contents: Read and write) hoặc đã vượt giới hạn truy cập.';
+    if (status === 404) return 'Không tìm thấy repo/nhánh, hoặc token chưa được cấp quyền cho repo này.';
+    return `GitHub trả về lỗi ${status}.`;
+  }
+
+  async githubGetFile(cfg) {
+    const url = `https://api.github.com/repos/${cfg.repo}/contents/${REPO_VOCAB_URL}?ref=${encodeURIComponent(cfg.branch)}`;
+    const res = await fetch(url, { headers: this.githubHeaders(cfg), cache: 'no-store' });
+    if (res.status === 404) return { text: null, sha: null }; // Repo chưa có vocab.json
+    if (!res.ok) throw new Error(this.describeGitHubError(res.status));
+    const data = await res.json();
+
+    let content = data.content;
+    if (!content && data.size > 0) {
+      // File trên 1MB: API contents không trả nội dung, phải lấy qua git blob
+      const blobRes = await fetch(`https://api.github.com/repos/${cfg.repo}/git/blobs/${data.sha}`, {
+        headers: this.githubHeaders(cfg),
+        cache: 'no-store'
+      });
+      if (!blobRes.ok) throw new Error(this.describeGitHubError(blobRes.status));
+      content = (await blobRes.json()).content;
+    }
+    return { text: base64ToUtf8(content || ''), sha: data.sha };
+  }
+
+  githubPutFile(cfg, text, sha) {
+    const url = `https://api.github.com/repos/${cfg.repo}/contents/${REPO_VOCAB_URL}`;
+    const body = {
+      message: `Cập nhật từ vựng (${this.vocabList.length} từ) từ ứng dụng`,
+      content: utf8ToBase64(text),
+      branch: cfg.branch
+    };
+    if (sha) body.sha = sha;
+    return fetch(url, {
+      method: 'PUT',
+      headers: { ...this.githubHeaders(cfg), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  }
+
+  scheduleGitHubPush() {
+    if (!this.githubReady || this.isApplyingRemote || !this.getGitHubConfig()) return;
+    clearTimeout(this.githubPushTimer);
+    this.setGitHubStatus('pending');
+    // Gom các thay đổi liên tiếp thành một commit
+    this.githubPushTimer = setTimeout(() => this.syncWithGitHub(), 2000);
+  }
+
+  async syncWithGitHub() {
+    const cfg = this.getGitHubConfig();
+    if (!cfg) return false;
+    if (this.githubSyncing) {
+      this.githubSyncQueued = true;
+      return false;
+    }
+
+    this.githubSyncing = true;
+    this.setGitHubStatus('syncing');
+    try {
+      // Thử lại khi repo vừa bị thiết bị khác cập nhật (sha không còn khớp)
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const remote = await this.githubGetFile(cfg);
+        const remoteItems = remote.text ? this.parseRemoteVocab(remote.text) : [];
+        if (!remoteItems) throw new Error('vocab.json trên repo bị sai định dạng, hãy sửa file trước.');
+
+        this.applyRemoteMerge(remoteItems);
+
+        const newText = JSON.stringify(this.vocabList, null, 2);
+        if (newText === remote.text) break;
+
+        const res = await this.githubPutFile(cfg, newText, remote.sha);
+        if (res.ok) {
+          this.saveRepoBase(this.vocabList);
+          break;
+        }
+        if ((res.status === 409 || res.status === 422) && attempt < 2) continue;
+        throw new Error(this.describeGitHubError(res.status));
+      }
+      this.setGitHubStatus('ok');
+      return true;
+    } catch (e) {
+      console.error('Lỗi đồng bộ GitHub:', e);
+      const msg = e instanceof TypeError ? 'Không kết nối được tới GitHub (kiểm tra mạng).' : e.message;
+      this.setGitHubStatus('error', msg);
+      this.showToast(`Chưa lưu được lên GitHub: ${msg}`, 'error');
+      return false;
+    } finally {
+      this.githubSyncing = false;
+      if (this.githubSyncQueued) {
+        this.githubSyncQueued = false;
+        this.scheduleGitHubPush();
+      }
+    }
+  }
+
+  setGitHubStatus(state, detail = '') {
+    this.githubStatus = state;
+    this.githubStatusDetail = detail;
+    const time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const states = {
+      off: ['🔗', 'Chưa kết nối GitHub: từ vựng chỉ lưu trên trình duyệt này'],
+      pending: ['⏳', 'Có thay đổi chưa lưu lên GitHub...'],
+      syncing: ['⏳', 'Đang đồng bộ với GitHub...'],
+      ok: ['☁️', `Đã đồng bộ với GitHub lúc ${time}`],
+      error: ['⚠️', `Lỗi đồng bộ GitHub: ${detail}`]
+    };
+    const [icon, text] = states[state] || states.off;
+
+    if (this.btnGitHubSync) {
+      this.btnGitHubSync.textContent = icon;
+      this.btnGitHubSync.setAttribute('title', text);
+    }
+    if (this.githubStatusMsg) {
+      this.githubStatusMsg.textContent = text;
+      this.githubStatusMsg.className = `github-status-msg ${state}`;
+    }
+  }
+
+  openGitHubModal() {
+    if (this.isLocked || !this.githubModal) return;
+    const cfg = this.getGitHubConfig();
+    this.githubTokenInput.value = '';
+    this.githubTokenInput.placeholder = cfg ? 'Đã lưu token (nhập token mới để thay)' : 'github_pat_...';
+    this.githubRepoInput.value = localStorage.getItem(STORAGE_GITHUB_REPO) || DEFAULT_GITHUB_REPO;
+    this.githubBranchInput.value = localStorage.getItem(STORAGE_GITHUB_BRANCH) || DEFAULT_GITHUB_BRANCH;
+    if (this.btnGitHubDisconnect) this.btnGitHubDisconnect.style.display = cfg ? 'inline-flex' : 'none';
+    this.setGitHubStatus(this.githubStatus || (cfg ? 'ok' : 'off'), this.githubStatusDetail);
+    this.githubModal.style.display = 'flex';
+    setTimeout(() => this.githubTokenInput.focus(), 50);
+  }
+
+  closeGitHubModal() {
+    if (this.githubModal) this.githubModal.style.display = 'none';
+  }
+
+  async handleGitHubConnectSubmit() {
+    const token = this.githubTokenInput.value.trim() || localStorage.getItem(STORAGE_GITHUB_TOKEN) || '';
+    const repo = this.githubRepoInput.value.trim()
+      .replace(/^https?:\/\/github\.com\//, '')
+      .replace(/\.git$/, '')
+      .replace(/\/+$/, '');
+    const branch = this.githubBranchInput.value.trim() || DEFAULT_GITHUB_BRANCH;
+
+    if (!token) {
+      this.setGitHubStatus('error', 'Vui lòng nhập token.');
+      return;
+    }
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+      this.setGitHubStatus('error', 'Tên repo phải có dạng tên-user/tên-repo.');
+      return;
+    }
+
+    // Kiểm tra token và repo trước khi lưu
+    this.setGitHubStatus('syncing');
+    try {
+      const res = await fetch(`https://api.github.com/repos/${repo}`, {
+        headers: this.githubHeaders({ token }),
+        cache: 'no-store'
+      });
+      if (!res.ok) {
+        this.setGitHubStatus('error', this.describeGitHubError(res.status));
+        return;
+      }
+    } catch (e) {
+      this.setGitHubStatus('error', 'Không kết nối được tới GitHub (kiểm tra mạng).');
+      return;
+    }
+
+    localStorage.setItem(STORAGE_GITHUB_TOKEN, token);
+    localStorage.setItem(STORAGE_GITHUB_REPO, repo);
+    localStorage.setItem(STORAGE_GITHUB_BRANCH, branch);
+    this.githubTokenInput.value = '';
+    if (this.btnGitHubDisconnect) this.btnGitHubDisconnect.style.display = 'inline-flex';
+
+    if (await this.syncWithGitHub()) {
+      this.showToast('Đã kết nối GitHub! Từ vựng sẽ tự lưu vào vocab.json trong repo.', 'success');
+    }
+  }
+
+  disconnectGitHub() {
+    clearTimeout(this.githubPushTimer);
+    localStorage.removeItem(STORAGE_GITHUB_TOKEN);
+    // Bỏ base vì GitHub Pages có thể chậm hơn bản đã ghi qua API
+    localStorage.removeItem(STORAGE_REPO_BASE);
+    if (this.btnGitHubDisconnect) this.btnGitHubDisconnect.style.display = 'none';
+    this.setGitHubStatus('off');
+    this.showToast('Đã ngắt kết nối GitHub và xóa token khỏi trình duyệt này.', 'info');
   }
 
   // ==========================================

@@ -82,15 +82,24 @@ Nhấp đúp chuột vào file [`index.html`](file:///e:/WORK/Projects/VibeCode/
 
 ---
 
-## 🔄 Đồng Bộ Từ Vựng Qua Repo (`vocab.json`)
+## 🔄 Đồng Bộ Từ Vựng Với GitHub (`vocab.json`)
 
-Từ vựng được lưu trong `localStorage` của **từng trình duyệt, từng địa chỉ trang** (GitHub Pages, localhost, file://), nên `git push`/`git pull` không tự mang từ vựng theo. Để đồng bộ:
+Từ vựng được lưu trong `localStorage` của từng trình duyệt, đồng thời đồng bộ với file `vocab.json` trong repo.
 
-1. Ở nơi có từ mới nhất, vào **Kho từ vựng → 📤 Xuất JSON** (file tải về tên là `vocab.json`).
-2. Chép `vocab.json` vào thư mục gốc của repo (cùng chỗ với `index.html`), ghi đè file cũ.
-3. `git add vocab.json && git commit -m "Cap nhat tu vung" && git push` (và `git pull` ở máy khác).
-4. Khi mở app, `vocab.json` được tự động **gộp** vào kho trên máy:
-   - Từ chưa có thì được thêm vào; từ đã có thì giữ bản được sửa sau cùng.
-   - Mỗi phiên bản `vocab.json` chỉ được gộp **một lần**, nên từ bạn xóa trên máy sẽ không bị nạp lại (muốn xóa hẳn thì xuất lại và commit `vocab.json`).
+### Kết nối một lần trên mỗi thiết bị (tự lưu lên GitHub)
+1. Tạo token tại https://github.com/settings/personal-access-tokens/new:
+   - **Repository access**: *Only select repositories* → chọn repo này.
+   - **Permissions → Contents**: *Read and write*.
+2. Mở app, bấm nút **🔗** trên thanh tiêu đề, dán token, bấm **Lưu & Đồng bộ**.
+3. Từ đó, mỗi lần thêm / sửa / xóa từ, app tự commit `vocab.json` lên repo (gom các thay đổi trong ~2 giây thành 1 commit). Biểu tượng trên header: ☁️ đã đồng bộ, ⏳ đang lưu, ⚠️ lỗi (bấm vào để xem chi tiết).
 
-> Lưu ý: Tính năng này cần mở app qua web (GitHub Pages hoặc localhost), không hoạt động khi mở trực tiếp file `index.html`. GitHub Pages có thể mất vài phút để cập nhật sau khi push. `vocab.json` nằm công khai trong repo.
+### Cách gộp dữ liệu
+- Từ có ở cả máy và repo: giữ bản được sửa sau cùng.
+- Từ thêm hoặc xóa ở thiết bị khác sẽ được thêm hoặc xóa trên máy này ở lần đồng bộ sau; từ đã xóa không bị "hồi sinh".
+- Thiết bị chưa kết nối vẫn tự **đọc** `vocab.json` từ GitHub Pages khi mở app, nhưng không ghi được.
+
+> Lưu ý:
+> - Token chỉ lưu trên trình duyệt; chỉ kết nối trên thiết bị của riêng bạn. Bấm **Ngắt kết nối** để xóa token.
+> - GitHub Pages mất 1–2 phút để cập nhật sau mỗi commit (thiết bị chưa kết nối sẽ thấy từ mới chậm hơn).
+> - Trên máy local, nhớ `git pull` trước khi sửa code để lấy các commit `vocab.json` do app tạo.
+> - `vocab.json` nằm công khai trong repo. Có thể khôi phục bản cũ qua lịch sử commit.
