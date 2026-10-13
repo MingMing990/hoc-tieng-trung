@@ -333,9 +333,6 @@ class VocabApp {
     this.reviewHanzi = document.getElementById('review-hanzi');
     this.reviewPinyin = document.getElementById('review-pinyin');
     this.reviewHanviet = document.getElementById('review-hanviet');
-    this.reviewExampleBox = document.getElementById('review-example-box');
-    this.reviewExampleCn = document.getElementById('review-example-cn');
-    this.reviewExampleVn = document.getElementById('review-example-vn');
     this.btnReveal = document.getElementById('btn-reveal-result');
     this.btnNextWord = document.getElementById('btn-next-word');
     this.btnRestartReview = document.getElementById('btn-restart-review');
@@ -349,8 +346,6 @@ class VocabApp {
     this.inputHanviet = document.getElementById('input-hanviet');
     this.inputMeaningVn = document.getElementById('input-meaning-vn');
     this.inputMeaningEn = document.getElementById('input-meaning-en');
-    this.inputExampleCn = document.getElementById('input-example-cn');
-    this.inputExampleVn = document.getElementById('input-example-vn');
     this.pinyinLiveChip = document.getElementById('pinyin-live-chip');
 
     // Form Edit Mode Elements
@@ -441,8 +436,6 @@ class VocabApp {
     this.quickEditHanviet = document.getElementById('quick-edit-hanviet');
     this.quickEditMeaningVn = document.getElementById('quick-edit-meaning-vn');
     this.quickEditMeaningEn = document.getElementById('quick-edit-meaning-en');
-    this.quickEditExampleCn = document.getElementById('quick-edit-example-cn');
-    this.quickEditExampleVn = document.getElementById('quick-edit-example-vn');
     this.btnCloseQuickEdit = document.getElementById('btn-close-quick-edit');
     this.btnCancelQuickEdit = document.getElementById('btn-cancel-quick-edit');
     this.quickEditVocabId = null;
@@ -498,13 +491,14 @@ class VocabApp {
     this.inputPinyin.addEventListener('input', (e) => this.handlePinyinInput(e));
     this.inputPinyin.addEventListener('blur', () => this.finalizePinyinConversion());
 
-    // Live preview & Realtime Duplicate check on Hanzi input
+    // Live preview, Realtime Duplicate check & Auto-Pinyin on Hanzi input
     this.inputHanzi.addEventListener('input', () => {
+      this.handleHanziAutoPinyin();
       this.checkRealtimeDuplicate();
       this.updateLivePreview();
     });
 
-    [this.inputPinyin, this.inputHanviet, this.inputMeaningVn, this.inputMeaningEn, this.inputExampleCn, this.inputExampleVn].forEach(el => {
+    [this.inputPinyin, this.inputHanviet, this.inputMeaningVn, this.inputMeaningEn].forEach(el => {
       if (el) el.addEventListener('input', () => this.updateLivePreview());
     });
 
@@ -530,14 +524,6 @@ class VocabApp {
       }
       this.updateLivePreview();
     });
-
-    if (this.inputExampleVn) {
-      this.inputExampleVn.addEventListener('blur', () => {
-        if (this.inputExampleVn.value) {
-          this.inputExampleVn.value = capitalizeFirstLetter(this.inputExampleVn.value);
-        }
-      });
-    }
 
     // Cancel Edit Mode Buttons
     if (this.btnCancelEditBanner) {
@@ -652,6 +638,12 @@ class VocabApp {
     });
 
     // Quick Edit Modal Event Listeners
+    if (this.quickEditHanzi) {
+      this.quickEditHanzi.addEventListener('input', () => {
+        this.handleQuickEditHanziAutoPinyin();
+      });
+    }
+
     if (this.quickEditPinyin) {
       this.quickEditPinyin.addEventListener('input', () => {
         const val = this.quickEditPinyin.value;
@@ -842,6 +834,58 @@ class VocabApp {
     }
   }
 
+  // Auto-generate Pinyin from Hanzi input
+  handleHanziAutoPinyin() {
+    if (!this.inputHanzi || !this.inputPinyin) return;
+    const val = this.inputHanzi.value.trim();
+    if (!val) {
+      this.inputPinyin.value = '';
+      if (this.pinyinLiveChip) this.pinyinLiveChip.textContent = '(Trống)';
+      return;
+    }
+    if (/[\u4e00-\u9fa5]/.test(val)) {
+      if (typeof pinyinPro !== 'undefined' && pinyinPro.pinyin) {
+        try {
+          const auto = pinyinPro.pinyin(val);
+          if (auto) {
+            this.inputPinyin.value = formatPinyin(auto);
+            if (this.pinyinLiveChip) {
+              this.pinyinLiveChip.textContent = this.inputPinyin.value || '(Trống)';
+            }
+          }
+        } catch (err) {
+          console.warn('Auto Pinyin error:', err);
+        }
+      }
+    }
+  }
+
+  handleQuickEditHanziAutoPinyin() {
+    if (!this.quickEditHanzi || !this.quickEditPinyin) return;
+    const val = this.quickEditHanzi.value.trim();
+    if (!val) {
+      this.quickEditPinyin.value = '';
+      if (this.quickEditPinyinChip) this.quickEditPinyinChip.textContent = '';
+      return;
+    }
+    if (/[\u4e00-\u9fa5]/.test(val)) {
+      if (typeof pinyinPro !== 'undefined' && pinyinPro.pinyin) {
+        try {
+          const auto = pinyinPro.pinyin(val);
+          if (auto) {
+            const formatted = formatPinyin(auto);
+            this.quickEditPinyin.value = formatted;
+            if (this.quickEditPinyinChip) {
+              this.quickEditPinyinChip.textContent = formatted || '';
+            }
+          }
+        } catch (err) {
+          console.warn('Auto Pinyin error in quick edit:', err);
+        }
+      }
+    }
+  }
+
   // Real-time Pinyin Conversion
   handlePinyinInput(e) {
     const input = this.inputPinyin;
@@ -966,8 +1010,6 @@ class VocabApp {
     if (this.quickEditHanviet) this.quickEditHanviet.value = item.hanviet !== '-' ? item.hanviet : '';
     if (this.quickEditMeaningVn) this.quickEditMeaningVn.value = item.meaningVn;
     if (this.quickEditMeaningEn) this.quickEditMeaningEn.value = item.meaningEn !== '-' ? item.meaningEn : '';
-    if (this.quickEditExampleCn) this.quickEditExampleCn.value = item.exampleCn || '';
-    if (this.quickEditExampleVn) this.quickEditExampleVn.value = item.exampleVn || '';
 
     if (this.quickEditModal) {
       this.quickEditModal.style.display = 'flex';
@@ -1007,8 +1049,6 @@ class VocabApp {
     let hanviet = this.quickEditHanviet.value.trim();
     let meaningVn = this.quickEditMeaningVn.value.trim();
     let meaningEn = this.quickEditMeaningEn.value.trim();
-    const exampleCn = this.quickEditExampleCn.value.trim();
-    let exampleVn = this.quickEditExampleVn.value.trim();
 
     if (!hanzi) {
       this.showToast('Vui lòng nhập Hán tự!', 'error');
@@ -1031,7 +1071,6 @@ class VocabApp {
     hanviet = formatHanViet(hanviet);
     meaningVn = capitalizeFirstLetter(meaningVn);
     meaningEn = meaningEn ? capitalizeFirstLetter(meaningEn) : '-';
-    exampleVn = exampleVn ? capitalizeFirstLetter(exampleVn) : '';
 
     // Check duplicate against existing vocabulary list (excluding current item)
     const duplicate = this.vocabList.find(x => 
@@ -1054,8 +1093,8 @@ class VocabApp {
       hanviet: hanviet || '-',
       meaningVn,
       meaningEn: meaningEn || '-',
-      exampleCn: exampleCn || '',
-      exampleVn: exampleVn || '',
+      exampleCn: '',
+      exampleVn: '',
       updatedAt: Date.now()
     };
 
@@ -1101,8 +1140,6 @@ class VocabApp {
     this.inputHanviet.value = item.hanviet !== '-' ? item.hanviet : '';
     this.inputMeaningVn.value = item.meaningVn;
     this.inputMeaningEn.value = item.meaningEn !== '-' ? item.meaningEn : '';
-    this.inputExampleCn.value = item.exampleCn || '';
-    this.inputExampleVn.value = item.exampleVn || '';
     if (this.pinyinLiveChip) this.pinyinLiveChip.textContent = item.pinyin;
 
     // Update Form UI for editing state
@@ -1164,8 +1201,6 @@ class VocabApp {
     let hanviet = this.inputHanviet.value.trim();
     let meaningVn = this.inputMeaningVn.value.trim();
     let meaningEn = this.inputMeaningEn.value.trim();
-    const exampleCn = this.inputExampleCn.value.trim();
-    let exampleVn = this.inputExampleVn.value.trim();
 
     if (!hanzi) {
       this.showToast('Vui lòng nhập Hán tự!', 'error');
@@ -1188,10 +1223,9 @@ class VocabApp {
     pinyin = formatPinyin(pinyin);
     // 2. Sino-Vietnamese reading strictly uppercase
     hanviet = formatHanViet(hanviet);
-    // 3. Meaning & Examples capitalize first letter
+    // 3. Meaning capitalize first letter
     meaningVn = capitalizeFirstLetter(meaningVn);
     meaningEn = meaningEn ? capitalizeFirstLetter(meaningEn) : '-';
-    exampleVn = exampleVn ? capitalizeFirstLetter(exampleVn) : '';
 
     // Check duplicate against existing vocabulary list
     const duplicate = this.vocabList.find(x => 
@@ -1216,8 +1250,8 @@ class VocabApp {
           hanviet: hanviet || '-',
           meaningVn,
           meaningEn: meaningEn || '-',
-          exampleCn: exampleCn || '',
-          exampleVn: exampleVn || '',
+          exampleCn: '',
+          exampleVn: '',
           updatedAt: Date.now()
         };
         this.saveVocabList(this.vocabList);
@@ -1250,8 +1284,8 @@ class VocabApp {
       hanviet: hanviet || '-',
       meaningVn,
       meaningEn: meaningEn || '-',
-      exampleCn: exampleCn || '',
-      exampleVn: exampleVn || '',
+      exampleCn: '',
+      exampleVn: '',
       createdAt: Date.now()
     };
 
@@ -1358,14 +1392,6 @@ class VocabApp {
     this.reviewHanzi.textContent = word.hanzi;
     this.reviewPinyin.textContent = formatPinyin(word.pinyin);
     this.reviewHanviet.textContent = formatHanViet(word.hanviet);
-    
-    if (word.exampleCn) {
-      this.reviewExampleBox.style.display = 'block';
-      this.reviewExampleCn.textContent = word.exampleCn;
-      this.reviewExampleVn.textContent = word.exampleVn || '';
-    } else {
-      this.reviewExampleBox.style.display = 'none';
-    }
   }
 
   revealReviewCard() {
@@ -1437,17 +1463,13 @@ class VocabApp {
       const hv = (item.hanviet || '').toString().toLowerCase();
       const vn = (item.meaningVn || '').toString().toLowerCase();
       const en = (item.meaningEn || '').toString().toLowerCase();
-      const exCn = (item.exampleCn || '').toString().toLowerCase();
-      const exVn = (item.exampleVn || '').toString().toLowerCase();
 
       return (
         hz.includes(query) ||
         py.includes(query) ||
         hv.includes(query) ||
         vn.includes(query) ||
-        en.includes(query) ||
-        exCn.includes(query) ||
-        exVn.includes(query)
+        en.includes(query)
       );
     });
 
@@ -1479,12 +1501,6 @@ class VocabApp {
             <div class="vocab-card-vn">🇻🇳 ${this.escapeHtml(capitalizeFirstLetter(item.meaningVn || ''))}</div>
             <div class="vocab-card-en">🇬🇧 ${this.escapeHtml(capitalizeFirstLetter(item.meaningEn || ''))}</div>
           </div>
-          ${item.exampleCn ? `
-            <div style="margin-top: 0.6rem; font-size: 0.85rem; color: var(--text-muted); background: rgba(0,0,0,0.15); padding: 0.4rem 0.6rem; border-radius: 6px;">
-              <div style="color: var(--text-primary); font-family: var(--font-hanzi);">${this.escapeHtml(item.exampleCn)}</div>
-              <div style="font-size: 0.8rem;">${this.escapeHtml(item.exampleVn || '')}</div>
-            </div>
-          ` : ''}
         </div>
         <div class="vocab-card-footer">
           <span style="font-size: 0.75rem; color: var(--text-muted);">ID: ${(item.id || '').toString().replace('vocab-', '#')}</span>

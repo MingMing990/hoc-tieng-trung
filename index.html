@@ -101,10 +101,6 @@
                 <div class="pinyin-badge" id="review-pinyin">xué xí</div>
                 <div class="hanviet-badge" id="review-hanviet">HỌC TẬP</div>
               </div>
-              <div class="word-example-box" id="review-example-box">
-                <p class="word-example-cn" id="review-example-cn"></p>
-                <p class="word-example-meaning" id="review-example-vn"></p>
-              </div>
             </div>
 
             <!-- Action Buttons: Reveal & Next -->
@@ -256,24 +252,6 @@
                     <span>Ý nghĩa tiếng Anh (English)</span>
                   </label>
                   <input type="text" id="input-meaning-en" class="form-input" placeholder="Ví dụ: To study, to learn...">
-                </div>
-              </div>
-
-              <!-- Ví dụ câu mẫu (Tùy chọn) -->
-              <div class="form-grid-2">
-                <div class="form-group">
-                  <label for="input-example-cn" class="form-label">
-                    <span>Câu ví dụ tiếng Trung</span>
-                    <span class="label-hint">Tùy chọn</span>
-                  </label>
-                  <input type="text" id="input-example-cn" class="form-input" placeholder="Ví dụ: 我每天都在学习汉语。">
-                </div>
-                <div class="form-group">
-                  <label for="input-example-vn" class="form-label">
-                    <span>Dịch nghĩa câu ví dụ</span>
-                    <span class="label-hint">Tùy chọn</span>
-                  </label>
-                  <input type="text" id="input-example-vn" class="form-input" placeholder="Ví dụ: Tôi học tiếng Trung mỗi ngày.">
                 </div>
               </div>
 
@@ -476,24 +454,6 @@
           <input type="text" id="quick-edit-meaning-en" class="form-input" placeholder="Ví dụ: To study, to learn...">
         </div>
 
-        <!-- Ví dụ câu mẫu -->
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label for="quick-edit-example-cn" class="form-label">
-              <span>Câu ví dụ tiếng Trung</span>
-              <span class="label-hint">Tùy chọn</span>
-            </label>
-            <input type="text" id="quick-edit-example-cn" class="form-input" placeholder="Ví dụ: 我每天都在学习汉语。">
-          </div>
-          <div class="form-group">
-            <label for="quick-edit-example-vn" class="form-label">
-              <span>Dịch nghĩa câu ví dụ</span>
-              <span class="label-hint">Tùy chọn</span>
-            </label>
-            <input type="text" id="quick-edit-example-vn" class="form-input" placeholder="Ví dụ: Tôi học tiếng Trung mỗi ngày.">
-          </div>
-        </div>
-
         <div class="modal-dialog-actions" style="margin-top: 1rem;">
           <button type="button" class="btn-secondary" id="btn-cancel-quick-edit">
             Hủy bỏ
@@ -597,11 +557,11 @@
   </div>
 
 
-
   <!-- Firebase Realtime Database SDK (Compat for Vanilla JS) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="firebase-config.js"></script>
+  <script src="pinyin-pro.min.js"></script>
   <script src="pinyin.js"></script>
   <script src="app.js"></script>
 </body>
