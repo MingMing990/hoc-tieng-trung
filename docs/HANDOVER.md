@@ -32,9 +32,11 @@
 
 ## 3. 🔑 Thông Tin Môi Trường & Kiểm Thử
 - **Thay đổi mới nhất (2026-10-13)**:
+  - **Sửa lỗi chỉnh sửa từ vựng cũ**: Đã xóa lệnh gọi `scheduleGitHubPush()` còn sót trong `saveVocabList()` khiến luồng lưu cập nhật báo `TypeError` và bị dừng.
+  - **Sửa định dạng form chỉnh sửa nhanh**: Âm Hán–Việt không còn bị ép in hoa trên từng phím gõ (tránh xung đột bộ gõ tiếng Việt làm mất khoảng trắng/sinh dấu gạch); dữ liệu được chuẩn hóa khi rời ô hoặc khi lưu, đồng thời bỏ dấu gạch thừa ở đầu/cuối. Nghĩa tiếng Việt và tiếng Anh được tự viết hoa chữ cái đầu khi rời ô và khi lưu.
   - **Xóa tính năng câu ví dụ**: Đã loại bỏ hoàn toàn các trường và hộp hiển thị câu ví dụ ở Thẻ ôn tập (Review card), Kho từ vựng (Vocab Bank card), Form thêm từ mới và Modal chỉnh sửa nhanh.
   - **Tự động điền Pinyin từ Hán tự**: Tích hợp thư viện `pinyin-pro` hoạt động mượt mà khi người dùng gõ hoặc dán chữ Hán vào ô Hán tự, Pinyin sẽ tự sinh ra với thanh điệu chuẩn. Ô Pinyin vẫn là input bình thường, cho phép tự do sửa đổi thủ công bất kỳ lúc nào.
-- **Tình trạng kiểm thử**: Chức năng kiểm tra đồng bộ, code sạch sẽ, không có lỗi xung đột.
+- **Tình trạng kiểm thử**: `git diff --check` đạt; môi trường hiện tại không có Node/Bun/Deno để chạy kiểm tra cú pháp tự động. Cần mở trình duyệt và thử sửa một từ cũ để xác nhận luồng giao diện và Firebase thực tế.
 
 ---
 

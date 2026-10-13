@@ -107,7 +107,11 @@ function formatPinyin(str) {
 
 function formatHanViet(str) {
   if (!str || str.trim() === '' || str.trim() === '-') return '-';
-  return str.trim().toUpperCase();
+  return str
+    .trim()
+    .replace(/^[-–—]+\s*|\s*[-–—]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .toUpperCase() || '-';
 }
 
 function normalizeVocabItem(item, index = 0) {
@@ -309,7 +313,6 @@ class VocabApp {
     this.updateStats();
     if (!this.isApplyingRemote) {
       this.scheduleFirebasePush();
-      this.scheduleGitHubPush();
     }
   }
 
@@ -658,8 +661,21 @@ class VocabApp {
     }
 
     if (this.quickEditHanviet) {
-      this.quickEditHanviet.addEventListener('input', () => {
-        this.quickEditHanviet.value = formatHanViet(this.quickEditHanviet.value);
+      this.quickEditHanviet.addEventListener('blur', () => {
+        const formatted = formatHanViet(this.quickEditHanviet.value);
+        this.quickEditHanviet.value = formatted !== '-' ? formatted : '';
+      });
+    }
+
+    if (this.quickEditMeaningVn) {
+      this.quickEditMeaningVn.addEventListener('blur', () => {
+        this.quickEditMeaningVn.value = capitalizeFirstLetter(this.quickEditMeaningVn.value);
+      });
+    }
+
+    if (this.quickEditMeaningEn) {
+      this.quickEditMeaningEn.addEventListener('blur', () => {
+        this.quickEditMeaningEn.value = capitalizeFirstLetter(this.quickEditMeaningEn.value);
       });
     }
 
