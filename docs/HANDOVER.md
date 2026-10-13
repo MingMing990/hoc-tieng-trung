@@ -24,17 +24,20 @@
 | [`vocab.json`](file:///d:/Code/duidui/chinese-vocab/vocab.json) | File backup dữ liệu (đã có sẵn các từ mới: 梦想, 快乐, 加油...). Không bắt buộc cho việc chạy app. |
 | [`docs/GUIDE.md`](file:///d:/Code/duidui/chinese-vocab/docs/GUIDE.md) | Cẩm nang hướng dẫn tổng hợp: Kiến trúc Firebase, setup, prompt 5 bước, cơ chế auto-handover và mở rộng sau này. |
 | [`CLAUDE.md`](file:///d:/Code/duidui/chinese-vocab/CLAUDE.md) / [`GEMINI.md`](file:///d:/Code/duidui/chinese-vocab/GEMINI.md) / [`AGENTS.md`](file:///d:/Code/duidui/chinese-vocab/AGENTS.md) | Tệp tin cấu hình tự động cho AI (Claude, Gemini, Cursor) tự nạp `docs/HANDOVER.md` khi bắt đầu phiên mới. |
-| [`docs/HANDOVER.md`](file:///d:/Code/duidui/chinese-vocab/docs/HANDOVER.md) | Nhật ký bàn giao tiến độ thực tế giữa các Agent. |
-| [`.gitignore`](file:///d:/Code/duidui/chinese-vocab/.gitignore) | Đã tạo sẵn template để sau này ẩn `firebase-config.js` nếu muốn. |
+| [`pinyin-pro.min.js`](file:///e:/WORK/Projects/VibeCode/HocTiengTrung/pinyin-pro.min.js) | Thư viện chuyển đổi Hán tự sang Pinyin chuẩn có thanh điệu ngoại tuyến (offline). |
+| [`docs/HANDOVER.md`](file:///e:/WORK/Projects/VibeCode/HocTiengTrung/docs/HANDOVER.md) | Nhật ký bàn giao tiến độ thực tế giữa các Agent. |
+| [`.gitignore`](file:///e:/WORK/Projects/VibeCode/HocTiengTrung/.gitignore) | Đã tạo sẵn template để sau này ẩn `firebase-config.js` nếu muốn. |
 
 ---
 
 ## 3. 🔑 Thông Tin Môi Trường & Kiểm Thử
-- **Tình trạng kiểm thử**: Đã chạy thử nghiệm trên trình duyệt thật (Playwright subagent), mở khóa thành công, kết nối Firebase ổn định, **0 lỗi console**.
+- **Thay đổi mới nhất (2026-10-13)**:
+  - **Xóa tính năng câu ví dụ**: Đã loại bỏ hoàn toàn các trường và hộp hiển thị câu ví dụ ở Thẻ ôn tập (Review card), Kho từ vựng (Vocab Bank card), Form thêm từ mới và Modal chỉnh sửa nhanh.
+  - **Tự động điền Pinyin từ Hán tự**: Tích hợp thư viện `pinyin-pro` hoạt động mượt mà khi người dùng gõ hoặc dán chữ Hán vào ô Hán tự, Pinyin sẽ tự sinh ra với thanh điệu chuẩn. Ô Pinyin vẫn là input bình thường, cho phép tự do sửa đổi thủ công bất kỳ lúc nào.
+- **Tình trạng kiểm thử**: Chức năng kiểm tra đồng bộ, code sạch sẽ, không có lỗi xung đột.
 
 ---
 
 ## 4. 🚀 Danh Sách Việc Tiếp Theo Cần Làm (Next Tasks)
-1. **Commit & Push Git**: Chạy `git add .` và `git commit` lưu lại toàn bộ thay đổi hôm nay lên repo GitHub.
-2. **Bảo mật & Deploy**: Khi chuyển sang Private Repo, có thể cấu hình deploy (GitHub Pages / Vercel / Cloudflare Pages).
-3. **Phát triển tính năng mới**: (Tùy chọn) Phân loại từ vựng theo cấp độ HSK 1 - HSK 6, tính năng âm thanh tự động, thống kê số ngày học liên tục (Streak).
+1. **Bảo mật & Deploy**: Khi chuyển sang Private Repo, có thể cấu hình deploy (GitHub Pages / Vercel / Cloudflare Pages).
+2. **Phát triển tính năng mới**: (Tùy chọn) Phân loại từ vựng theo cấp độ HSK 1 - HSK 6, tính năng âm thanh tự động, thống kê số ngày học liên tục (Streak).
